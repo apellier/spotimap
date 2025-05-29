@@ -80,97 +80,9 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 initialVectorSource.addFeatures(features);
             })
             .catch(error => console.error("Error loading GeoJSON data:", error));
+        )
 
-        // --- Interaction for Hover Highlighting (uses pointer events internally) ---
-        const selectHoverStyle = new Style({
-            stroke: new Stroke({
-                color: 'var(--accent-primary)',
-                width: 2.5,
-            }),
-            zIndex: 1
-        });
-
-        const selectInteraction = new Select({
-            condition: pointerMove,
-            style: selectHoverStyle,
-            layers: [countriesLayer],
-            multi: false,
-        });
-        initialMap.addInteraction(selectInteraction);
-
-        // --- Pointer Move Handler for Tooltip and Cursor (using PointerEvent) ---
-        const pointerMoveHandler = (evt: OLMapBrowserEvent<PointerEvent>) => {
-            if (evt.dragging || !mapRef.current) {
-                setTooltip(prev => ({ ...prev, visible: false }));
-                if (mapElement.current) mapElement.current.style.cursor = '';
-                return;
-            }
-
-            const pixel = mapRef.current.getEventPixel(evt.originalEvent);
-            const featureAtPixel = mapRef.current.forEachFeatureAtPixel(
-                pixel,
-                (feature) => feature as Feature<Geometry>,
-                { layerFilter: (layer) => layer === countriesLayer }
-            );
-
-            if (featureAtPixel) {
-                const countryName = featureAtPixel.get('name') || featureAtPixel.get('ADMIN') || 'Unknown Country';
-                const countryCode = featureAtPixel.get('ISO3166-1-Alpha-2')?.toUpperCase();
-                const songCount = countryCode ? (countrySongCounts.get(countryCode) || 0) : 0;
-
-                setTooltip({
-                    visible: true,
-                    content: `${countryName}: ${songCount} song(s)`,
-                    x: evt.originalEvent.clientX,
-                    y: evt.originalEvent.clientY,
-                });
-                if (mapElement.current) mapElement.current.style.cursor = 'pointer';
-            } else {
-                setTooltip(prev => ({ ...prev, visible: false }));
-                if (mapElement.current) mapElement.current.style.cursor = '';
-            }
-        };
-        
-
-        // --- Click Handler (using PointerEvent) ---
-        const clickHandler = (evt: OLMapBrowserEvent<PointerEvent>) => {
-            if (!mapRef.current) return;
-            mapRef.current.forEachFeatureAtPixel(
-                evt.pixel,
-                (featureAtPixel) => {
-                    const typedFeature = featureAtPixel as Feature<Geometry>;
-                    const countryCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
-                    const countryName = typedFeature.get('name') || typedFeature.get('ADMIN') || 'Unknown Country';
-                    if (countryCode) {
-                        onCountryClick(countryCode, countryName);
-                    }
-                    return true;
-                },
-                { layerFilter: (layer) => layer === countriesLayer }
-            );
-        };
-        
-
-        // --- Mouse Out of Map Container Handler (uses MouseEvent as it's a DOM event) ---
-        const mapElementCurrent = mapElement.current;
-        const mouseOutHandler = (evt: MouseEvent) => {
-            if (mapElementCurrent && !mapElementCurrent.contains(evt.relatedTarget as Node)) {
-                 setTooltip(prev => ({ ...prev, visible: false }));
-            }
-        };
-        mapElementCurrent?.addEventListener('mouseout', mouseOutHandler);
-
-
-        // --- Cleanup ---
-        return () => {
-            if (initialMap) {
-                initialMap.removeInteraction(selectInteraction);
-                mapElementCurrent?.removeEventListener('mouseout', mouseOutHandler);
-                initialMap.setTarget(undefined);
-            }
-            mapRef.current = null;
-        };
-    }, [onCountryClick, countrySongCounts]);
+    
 
     // Effect for styling the countries layer based on song counts
     useEffect(() => {
