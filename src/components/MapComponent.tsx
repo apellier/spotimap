@@ -1,3 +1,4 @@
+// src/components/MapComponent.tsx
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -12,7 +13,8 @@ import GeoJSON from 'ol/format/GeoJSON';
 import Feature, { FeatureLike } from 'ol/Feature';
 import { Geometry } from 'ol/geom';
 import { Fill, Stroke, Style } from 'ol/style';
-import { getCountryColor } from '@/utils/mapUtils'; // Assuming this path is correct
+import { getCountryColor } from '@/utils/mapUtils';
+import { MapBrowserEvent } from 'ol'; // Default import
 
 interface MapComponentProps {
     countrySongCounts: Map<string, number>;
@@ -33,7 +35,6 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
     const [maxSongCount, setMaxSongCount] = useState(1);
     const [tooltip, setTooltip] = useState<TooltipInfo>({ visible: false, content: '', x: 0, y: 0 });
 
-    // Effect to calculate maxSongCount
     useEffect(() => {
         if (countrySongCounts.size > 0) {
             const counts = Array.from(countrySongCounts.values());
@@ -43,7 +44,6 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
         }
     }, [countrySongCounts]);
 
-    // Effect for map initialization and event handling
     useEffect(() => {
         if (!mapElement.current || mapRef.current) {
             return;
@@ -76,11 +76,87 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 initialVectorSource.addFeatures(features);
             })
             .catch(error => console.error("Error loading GeoJSON data:", error));
-        )
 
-    
+        initialMap.on('pointermove', (evt: MapBrowserEvent<any>) => { // Using <any> for the event type
+            if (evt.dragging || !mapRef.current) {
+                setTooltip(prev => ({ ...prev, visible: false }));
+                if (mapElement.current) mapElement.current.style.cursor = '';
+                return;
+            }
+            const pixel = mapRef.current.getEventPixel(evt.originalEvent);
+            let featureFound = false;
+            mapRef.current.forEachFeatureAtPixel(pixel, (featureAtPixel) => {
+                featureFound = true;
+                const typedFeature = featureAtPixel as Feature<Geometry>;
+                const countryName = typedFeature.get('ADMIN') || typedFeature.get('NAME_EN') || typedFeature.get('NAME') || 'Unknown Country';
+                const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
+                const songCount = isoCode ? (countrySongCounts.get(isoCode) || 0) : 0;
 
-    // Effect for styling the countries layer based on song counts
+                let xCoord = 0;
+                let yCoord = 0;
+                const originalEvent = evt.originalEvent; // originalEvent is 'any' here
+                if (originalEvent instanceof PointerEvent) {
+                    xCoord = originalEvent.pageX;
+                    yCoord = originalEvent.pageY;
+                } else if (originalEvent instanceof MouseEvent) { // Fallback for older systems
+                    xCoord = originalEvent.pageX;
+                    yCoord = originalEvent.pageY;
+                } else if (originalEvent instanceof TouchEvent && originalEvent.changedTouches?.length > 0) {
+                    xCoord = originalEvent.changedTouches[0].pageX;
+                    yCoord = originalEvent.changedTouches[0].pageY;
+                }
+
+                setTooltip({
+                    visible: true,
+                    content: `${countryName}: ${songCount} song${songCount === 1 ? '' : 's'}`,
+                    x: xCoord,
+                    y: yCoord,
+                });
+                if (mapElement.current) mapElement.current.style.cursor = 'pointer';
+                return true; 
+            });
+            if (!featureFound) {
+                setTooltip(prev => ({ ...prev, visible: false }));
+                if (mapElement.current) mapElement.current.style.cursor = '';
+            }
+        });
+
+        initialMap.on('click', (evt: MapBrowserEvent<any>) => { // Using <any> for the event type
+            if (!mapRef.current) return;
+            const pixel = mapRef.current.getEventPixel(evt.originalEvent);
+            mapRef.current.forEachFeatureAtPixel(pixel, (featureAtPixel) => {
+                const typedFeature = featureAtPixel as Feature<Geometry>;
+                const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
+                const countryName = typedFeature.get('ADMIN') || typedFeature.get('NAME_EN') || typedFeature.get('NAME') || isoCode || 'Unknown';
+                if (isoCode) {
+                    onCountryClick(isoCode, countryName);
+                }
+                return true; 
+            });
+        });
+        
+        const mapTargetElement = initialMap.getTargetElement();
+        const pointerLeaveListener = () => {
+            setTooltip(prev => ({ ...prev, visible: false }));
+            if (mapElement.current) mapElement.current.style.cursor = '';
+        };
+        if (mapTargetElement instanceof HTMLElement) { // Ensure it's an HTMLElement
+            mapTargetElement.addEventListener('pointerleave', pointerLeaveListener);
+        }
+
+         return () => {
+            if (mapTargetElement instanceof HTMLElement) {
+                mapTargetElement.removeEventListener('pointerleave', pointerLeaveListener);
+            }
+            if (mapRef.current) {
+                mapRef.current.setTarget(undefined);
+                // mapRef.current.dispose(); // Consider if .dispose() is needed for full cleanup
+                mapRef.current = null;
+            }
+        };
+
+    }, [countrySongCounts, onCountryClick]); 
+
     useEffect(() => {
         if (!vectorLayerRef.current || !countrySongCounts || maxSongCount <= 0) {
             return;
@@ -109,9 +185,9 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 <div
                     className="pointer-events-none fixed z-[1000] whitespace-nowrap rounded-nb border-nb border-nb-accent bg-nb-bg px-nb-md py-nb-sm text-sm text-nb-text shadow-nb-accent"
                     style={{
-                        top: `${tooltip.y + 15}px`,
-                        left: `${tooltip.x + 15}px`,
-                        transform: 'translate(-50%, -100%)',
+                        top: `${tooltip.y}px`,      
+                        left: `${tooltip.x + 15}px`, 
+                        transform: 'translateY(-100%)', 
                     }}
                 >
                     {tooltip.content}
