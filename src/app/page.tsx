@@ -6,10 +6,10 @@ import React, { useState, useEffect, ChangeEvent, useCallback } from "react";
 import * as d3 from 'd3'; // Import D3
 
 // Main styling module for HomePage layout
-import styles from './page.module.css'; // Assuming Tailwind utility classes are also used directly in JSX
+//import styles from './page.module.css'; // Assuming Tailwind utility classes are also used directly in JSX
 
 // Import Hooks
-import { useTheme } from '@/contexts/ThemeContext';
+//import { useTheme } from '@/contexts/ThemeContext';
 import { useSpotifyData } from '@/hooks/useSpotifyData';
 import { useArtistOrigins } from '@/hooks/useArtistOrigins';
 import { useMapData } from '@/hooks/useMapData';
@@ -23,7 +23,7 @@ import CountryDetailsPanel from '@/components/CountryDetailsPanel';
 import UnknownsPanel from '@/components/UnknownsPanel';
 
 // Import Types
-import { SelectedCountryInfo, PlaylistItem, Track, LegendItem, ArtistDetail } from '@/types';
+import { SelectedCountryInfo, Track, LegendItem, ArtistDetail } from '@/types';
 
 // Import Utilities
 import { callSpotifyApi } from '@/lib/spotifyApi'; // Ensure this path is correct
@@ -31,12 +31,12 @@ import { getCountryColor } from '@/utils/mapUtils'; // Ensure this path is corre
 
 export default function HomePage() {
     const { data: session, status: authStatus } = useSession();
-    const { theme: currentTheme, toggleTheme } = useTheme();
+    //const { theme: currentTheme, toggleTheme } = useTheme();
 
     const {
-        likedSongs, isLoadingLikedSongs, likedSongsError, fetchLikedSongs,
-        playlists, isLoadingPlaylists, playlistsError,
-        playlistTracks, isLoadingPlaylistTracks, playlistTracksError, fetchTracksForPlaylist
+        likedSongs, isLoadingLikedSongs, fetchLikedSongs,
+        playlists, isLoadingPlaylists,
+        playlistTracks, isLoadingPlaylistTracks, fetchTracksForPlaylist
     } = useSpotifyData();
 
     const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>("");
@@ -195,9 +195,48 @@ export default function HomePage() {
     const handleUnknownsClick = () => setIsUnknownsWindowOpen(prev => !prev);
     const closeCountryPanel = () => { setIsCountryPanelOpen(false); setPlaybackError(null); setPlaylistCreationStatus(null); };
 
-    const handlePlaySong = useCallback(async (trackId: string) => { /* ... (your existing implementation) ... */ }, [session]);
-    const handlePlayCountrySongsRandomly = useCallback(async () => { /* ... (your existing implementation) ... */ }, [session, selectedCountryDetails, callSpotifyApi]);
-    const handleSaveCountrySongsToPlaylist = useCallback(async () => { /* ... (your existing implementation) ... */ }, [session, selectedCountryDetails, callSpotifyApi]);
+    const handlePlaySong = useCallback(async (trackId: string) => { 
+        if (!session?.accessToken || !trackId) { setPlaybackError("Authentication or Track ID missing."); return; }
+        setPlaybackLoading(trackId); setPlaybackError(null);
+        try { await callSpotifyApi('/me/player/play', 'PUT', session.accessToken, { uris: [`spotify:track:${trackId}`] }); }
+        catch (error: any) { setPlaybackError(error.message || "Failed to play song."); }
+        finally { setPlaybackLoading(null); }
+    }, [session]);
+    const handlePlayCountrySongsRandomly = useCallback(async () => { 
+        if (!session?.accessToken || !selectedCountryDetails) { setPlaybackError("Auth or country details missing."); setPlaybackLoading(null); return; }
+        setPlaybackLoading("country-random"); setPlaybackError(null); setPlaylistCreationStatus(null);
+        const trackUris: string[] = selectedCountryDetails.artists.flatMap(artist => artist.songs.map(song => `spotify:track:${song.id}`));
+        if (trackUris.length === 0) { setPlaybackError("No songs to play."); setPlaybackLoading(null); return; }
+        for (let i = trackUris.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [trackUris[i], trackUris[j]] = [trackUris[j], trackUris[i]]; }
+        try {
+            let deviceId: string | undefined = undefined;
+            try {
+                const devicesData = await callSpotifyApi('/me/player/devices', 'GET', session.accessToken);
+                if (devicesData?.devices?.length > 0) { const activeDevice = devicesData.devices.find((d: any) => d.is_active === true); deviceId = activeDevice?.id || devicesData.devices[0]?.id; }
+            } catch (deviceError: any) { console.warn("Could not fetch Spotify devices:", deviceError.message); }
+            let shuffleUrl = `/me/player/shuffle?state=true`; if (deviceId) shuffleUrl += `&device_id=${deviceId}`;
+            await callSpotifyApi(shuffleUrl, 'PUT', session.accessToken);
+            const playBody: { uris: string[]; device_id?: string } = { uris: trackUris }; if (deviceId) playBody.device_id = deviceId;
+            await callSpotifyApi('/me/player/play', 'PUT', session.accessToken, playBody);
+        } catch (error: any) { console.error("Error playing country songs randomly:", error); setPlaybackError(error.message || "Failed to play. Ensure Spotify is open & Premium."); }
+        finally { setPlaybackLoading(null); }
+     }, [session, selectedCountryDetails, callSpotifyApi]);
+    const handleSaveCountrySongsToPlaylist = useCallback(async () => { 
+        if (!session?.accessToken || !selectedCountryDetails || !session.user?.id) { setPlaylistCreationStatus("Auth, country details, or user ID missing."); return; }
+        setIsCreatingPlaylist(true); setPlaylistCreationStatus("Creating playlist...");
+        const { name: countryName, artists: artistsDetails } = selectedCountryDetails;
+        const trackUris: string[] = artistsDetails.flatMap(artist => artist.songs.map(song => `spotify:track:${song.id}`));
+        if (trackUris.length === 0) { setPlaylistCreationStatus("No songs to add."); setIsCreatingPlaylist(false); return; }
+        try {
+            const newPlaylist = await callSpotifyApi(`/users/${session.user.id}/playlists`, 'POST', session.accessToken, { name: `Songs from ${countryName} (MapApp)`, public: false, description: `Songs from ${countryName}. Contains ${trackUris.length} songs.` });
+            if (!newPlaylist?.id) throw new Error("Failed to create playlist.");
+            setPlaylistCreationStatus(`Playlist "${newPlaylist.name}" created! Adding songs...`);
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < trackUris.length; i += CHUNK_SIZE) { await callSpotifyApi(`/playlists/${newPlaylist.id}/tracks`, 'POST', session.accessToken, { uris: trackUris.slice(i, i + CHUNK_SIZE) }); }
+            setPlaylistCreationStatus(`Added ${trackUris.length} songs to "${newPlaylist.name}"!`);
+        } catch (error: any) { setPlaylistCreationStatus(`Error: ${error.message || "Failed to save playlist."}`); }
+        finally { setIsCreatingPlaylist(false); }
+    }, [session, selectedCountryDetails, callSpotifyApi]);
 
 
     // --- RENDER LOGIC ---
@@ -244,7 +283,7 @@ export default function HomePage() {
                         </>
                     ) : (
                          <div className="flex h-full w-full items-center justify-center border-nb-thick border-dashed border-nb-border/50 p-nb-lg text-center text-nb-text/70">
-                            <p>Select "Liked Songs" or a playlist from the top menu to begin exploring your music map!</p>
+                            <p>Select &quot;Liked Songs&quot; or a playlist from the top menu to begin exploring your music map!</p>
                         </div>
                     )}
 
