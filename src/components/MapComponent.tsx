@@ -88,7 +88,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             mapRef.current.forEachFeatureAtPixel(pixel, (featureAtPixel) => {
                 featureFound = true;
                 const typedFeature = featureAtPixel as Feature<Geometry>;
-                const countryName = typedFeature.get('ADMIN') || typedFeature.get('NAME_EN') || typedFeature.get('NAME') || 'Unknown Country';
+                const countryName = typedFeature.get('name') || 'Unknown Country';
                 const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
                 const songCount = isoCode ? (countrySongCounts.get(isoCode) || 0) : 0;
 
@@ -127,7 +127,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             mapRef.current.forEachFeatureAtPixel(pixel, (featureAtPixel) => {
                 const typedFeature = featureAtPixel as Feature<Geometry>;
                 const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
-                const countryName = typedFeature.get('ADMIN') || typedFeature.get('NAME_EN') || typedFeature.get('NAME') || isoCode || 'Unknown';
+                const countryName = typedFeature.get('name') || 'Unknown';
                 if (isoCode) {
                     onCountryClick(isoCode, countryName);
                 }
