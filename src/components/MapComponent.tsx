@@ -12,10 +12,6 @@ import GeoJSON from 'ol/format/GeoJSON';
 import Feature, { FeatureLike } from 'ol/Feature';
 import { Geometry } from 'ol/geom';
 import { Fill, Stroke, Style } from 'ol/style';
-import OLMapBrowserEvent from 'ol/MapBrowserEvent'; // OpenLayers MapBrowserEvent
-// MapEventType import removed as we'll use string literals
-import { Select } from 'ol/interaction';
-import { pointerMove } from 'ol/events/condition';
 import { getCountryColor } from '@/utils/mapUtils'; // Assuming this path is correct
 
 interface MapComponentProps {
