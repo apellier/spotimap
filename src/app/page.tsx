@@ -1,95 +1,274 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+// src/app/page.tsx
+"use client";
 
-export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+import { useSession, signIn, signOut } from "next-auth/react";
+import React, { useState, useEffect, ChangeEvent, useCallback } from "react";
+import * as d3 from 'd3'; // Import D3
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+// Main styling module for HomePage layout
+import styles from './page.module.css'; // Assuming Tailwind utility classes are also used directly in JSX
+
+// Import Hooks
+import { useTheme } from '@/contexts/ThemeContext';
+import { useSpotifyData } from '@/hooks/useSpotifyData';
+import { useArtistOrigins } from '@/hooks/useArtistOrigins';
+import { useMapData } from '@/hooks/useMapData';
+
+// Import Components
+import TopMenu from '@/components/TopMenu';
+import MapComponent from '@/components/MapComponent';
+import MapLegend from '@/components/MapLegend';
+import LoginScreen from '@/components/LoginScreen';
+import CountryDetailsPanel from '@/components/CountryDetailsPanel';
+import UnknownsPanel from '@/components/UnknownsPanel';
+
+// Import Types
+import { SelectedCountryInfo, PlaylistItem, Track, LegendItem, ArtistDetail } from '@/types';
+
+// Import Utilities
+import { callSpotifyApi } from '@/lib/spotifyApi'; // Ensure this path is correct
+import { getCountryColor } from '@/utils/mapUtils'; // Ensure this path is correct
+
+export default function HomePage() {
+    const { data: session, status: authStatus } = useSession();
+    const { theme: currentTheme, toggleTheme } = useTheme();
+
+    const {
+        likedSongs, isLoadingLikedSongs, likedSongsError, fetchLikedSongs,
+        playlists, isLoadingPlaylists, playlistsError,
+        playlistTracks, isLoadingPlaylistTracks, playlistTracksError, fetchTracksForPlaylist
+    } = useSpotifyData();
+
+    const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>("");
+    const [currentSourceLabel, setCurrentSourceLabel] = useState<string>("Select Source");
+
+    const currentTracks: Array<{ track: Track }> = selectedPlaylistId ? playlistTracks : likedSongs;
+
+    const {
+        artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList
+    } = useArtistOrigins(currentTracks);
+
+    // useMapData hook now primarily handles countrySongCounts and isAggregating
+    // We will handle legendItems generation directly in HomePage for clarity with the D3 logic
+    const { countrySongCounts, isAggregating } = useMapData(currentTracks, artistCountries);
+    const [legendItems, setLegendItems] = useState<LegendItem[]>([]);
+
+
+    // UI Panel/Modal States
+    const [isCountryPanelOpen, setIsCountryPanelOpen] = useState(false);
+    const [selectedCountryDetails, setSelectedCountryDetails] = useState<SelectedCountryInfo | null>(null);
+    const [isUnknownsWindowOpen, setIsUnknownsWindowOpen] = useState(false);
+
+    // Playback & Playlist Creation States
+    const [playbackError, setPlaybackError] = useState<string | null>(null);
+    const [playbackLoading, setPlaybackLoading] = useState<string | null>(null);
+    const [playlistCreationStatus, setPlaylistCreationStatus] = useState<string | null>(null);
+    const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
+
+
+    // --- Legend Item Generation (D3-inspired) ---
+    useEffect(() => {
+        if (countrySongCounts.size === 0 && Array.from(countrySongCounts.values()).every(c => c === 0) && currentTracks.length > 0 && !isLoadingArtistCountries && !isAggregating) {
+             // Only show "0 songs" if tracks are loaded but all counts are zero
+            const maxCountForLegend = Math.max(...Array.from(countrySongCounts.values()), 0);
+            setLegendItems([{ color: getCountryColor(0, maxCountForLegend), label: "0 songs" }]);
+            return;
+        }
+        if (countrySongCounts.size === 0 && currentTracks.length === 0 && !isLoadingArtistCountries && !isAggregating ) {
+            setLegendItems([]); // Clear legend if no tracks and no counts
+            return;
+        }
+
+
+        const maxCount = Math.max(...Array.from(countrySongCounts.values()), 1);
+        const safeMaxCount = Math.max(1, maxCount);
+        const midPoint = Math.round(Math.sqrt(safeMaxCount));
+
+        let domainPoints = [1, safeMaxCount];
+        if (midPoint > 1 && midPoint < safeMaxCount) {
+            domainPoints = [1, midPoint, safeMaxCount];
+        } else if (safeMaxCount === 1) {
+            domainPoints = [1, 1.00001]; // D3 scale needs distinct domain points
+        }
+        // Ensure domainPoints are sorted and unique if logic gets complex
+        domainPoints = [...new Set(domainPoints)].sort((a, b) => a - b);
+        if (domainPoints.length === 1 && domainPoints[0] === 1) domainPoints.push(1.00001); // Handle single point domain for maxCount=1
+
+        const legendColorScale = d3.scaleLog<string, string>()
+            .domain(domainPoints)
+            .range(["#C7F9CC", "#1ED760", "#00441B"].slice(0, domainPoints.length)) // Ensure range matches domain length
+            .interpolate(d3.interpolateRgb)
+            .clamp(true);
+
+        let steps = [1];
+        if (midPoint > 1 && midPoint < maxCount) {
+            steps.push(midPoint);
+        }
+        if (maxCount > 1) {
+            steps.push(maxCount);
+        }
+        steps = [...new Set(steps.filter(s => s > 0))].sort((a, b) => a - b);
+        if (steps.length === 0 && maxCount === 1) steps = [1];
+
+
+        const newLegendItems: LegendItem[] = [];
+        if (steps.length > 0) {
+            steps.forEach((step, index) => {
+                const color = legendColorScale(step);
+                let labelText = `${step}`;
+                if (index === steps.length - 1 && steps.length > 1 && step > (steps[index-1] || 0) ) {
+                    labelText = `${steps[index-1] === 1 ? steps[index-1] : (steps[index-1] || step)}+`; // Use previous step for X+ if not 1
+                    if (steps.length === 1 && step === 1) labelText = "1"; // handle maxCount=1 correctly
+                    else if (steps.length ===1 && step > 1) labelText = "1+"; // If only one step and it's >1
+                }
+                 // Refine label for single value steps
+                if (steps.length === 1 || (index < steps.length -1 && steps[index+1] === step +1 ) ){
+                     labelText = `${step}`;
+                }
+
+
+                newLegendItems.push({ color, label: `${labelText} song${(step === 1 && !labelText.endsWith('+')) ? '' : 's'}` });
+            });
+        }
+
+
+        // Add the "0 songs" entry consistently
+        const zeroColor = getCountryColor(0, maxCount); // Get the defined '0 songs' color
+        newLegendItems.unshift({ color: zeroColor, label: "0 songs" });
+
+        // Filter out duplicate labels (e.g., if "1 songs" and "1+ songs" are for the same step value)
+        const distinctLegendItems = newLegendItems.reduce((acc, current) => {
+            if (!acc.find(item => item.label.toLowerCase() === current.label.toLowerCase())) {
+                acc.push(current);
+            }
+            return acc;
+        }, [] as LegendItem[]);
+
+        setLegendItems(distinctLegendItems);
+
+    }, [countrySongCounts, currentTracks.length, isLoadingArtistCountries, isAggregating]); // Added dependencies
+
+    // --- UI Handlers (fetchLikedSongs, handlePlaylistChange, etc. - Keep from your previous working version) ---
+    const handleFetchLikedSongs = useCallback(() => {
+        setIsCountryPanelOpen(false); setIsUnknownsWindowOpen(false); setPlaybackError(null); setPlaylistCreationStatus(null);
+        fetchLikedSongs();
+        setSelectedPlaylistId(""); setCurrentSourceLabel("Liked Songs");
+    }, [fetchLikedSongs]);
+
+    const handlePlaylistChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+        setIsCountryPanelOpen(false); setIsUnknownsWindowOpen(false); setPlaybackError(null); setPlaylistCreationStatus(null);
+        const newPlaylistId = event.target.value;
+        setSelectedPlaylistId(newPlaylistId);
+        if (newPlaylistId) {
+            fetchTracksForPlaylist(newPlaylistId);
+            const playlist = playlists.find(p => p.id === newPlaylistId);
+            setCurrentSourceLabel(playlist ? playlist.name : "Selected Playlist");
+        } else {
+            setCurrentSourceLabel("Select Source");
+            // Clear specific track data; currentTracks will default to likedSongs
+            // (useSpotifyData hook handles clearing the other list type internally)
+            // setPlaylistTracks([]); // If useSpotifyData doesn't clear it
+        }
+    }, [fetchTracksForPlaylist, playlists]);
+
+    const handleCountryClick = useCallback((isoCode: string, countryNameFromMap: string) => {
+        const songCount = countrySongCounts.get(isoCode.toUpperCase()) || 0;
+        const artistsFromCountry: ArtistDetail[] = [];
+        if (songCount > 0) {
+            currentTracks.forEach(item => {
+                if (item.track?.artists?.[0]?.name) {
+                    const firstArtist = item.track.artists[0];
+                    const artistCountry = artistCountries.get(firstArtist.name.toLowerCase());
+                    if (artistCountry?.toUpperCase() === isoCode.toUpperCase()) {
+                        let existingArtist = artistsFromCountry.find(a => a.name === firstArtist.name);
+                        if (!existingArtist) { existingArtist = { name: firstArtist.name, songs: [] }; artistsFromCountry.push(existingArtist); }
+                        if (item.track) existingArtist.songs.push({ id: item.track.id, name: item.track.name });
+                    }
+                }
+            });
+        }
+        artistsFromCountry.sort((a,b) => a.name.localeCompare(b.name)).forEach(a => a.songs.sort((s1,s2)=>s1.name.localeCompare(s2.name)));
+        setSelectedCountryDetails({ isoCode, name: countryNameFromMap, songCount, artists: artistsFromCountry });
+        setIsCountryPanelOpen(true); setPlaybackError(null); setPlaylistCreationStatus(null);
+    }, [countrySongCounts, currentTracks, artistCountries]);
+
+    const handleUnknownsClick = () => setIsUnknownsWindowOpen(prev => !prev);
+    const closeCountryPanel = () => { setIsCountryPanelOpen(false); setPlaybackError(null); setPlaylistCreationStatus(null); };
+
+    const handlePlaySong = useCallback(async (trackId: string) => { /* ... (your existing implementation) ... */ }, [session]);
+    const handlePlayCountrySongsRandomly = useCallback(async () => { /* ... (your existing implementation) ... */ }, [session, selectedCountryDetails, callSpotifyApi]);
+    const handleSaveCountrySongsToPlaylist = useCallback(async () => { /* ... (your existing implementation) ... */ }, [session, selectedCountryDetails, callSpotifyApi]);
+
+
+    // --- RENDER LOGIC ---
+    if (authStatus === "loading" && !session) {
+        return <div className="flex min-h-screen items-center justify-center text-lg text-nb-text/70">Authenticating...</div>;
+    }
+
+    if (!session) {
+        return <LoginScreen onSignIn={() => signIn("spotify")} />;
+    }
+
+    const isLoadingAnythingNonAuth = isLoadingLikedSongs || isLoadingPlaylists || isLoadingPlaylistTracks || isLoadingArtistCountries || isAggregating;
+
+    return (
+        <div className="flex min-h-screen flex-col bg-nb-bg text-nb-text">
+            <TopMenu
+                isLoggedIn={!!session}
+                userName={session.user?.name}
+                onSignOut={() => signOut()}
+                onSignIn={() => signIn("spotify")}
+                // currentTheme={currentTheme} // Provided by useTheme directly in TopMenu
+                // onToggleTheme={toggleTheme} // Provided by useTheme directly in TopMenu
+                currentSourceLabel={currentSourceLabel}
+                onFetchLikedSongs={handleFetchLikedSongs}
+                playlists={playlists}
+                selectedPlaylistId={selectedPlaylistId}
+                onPlaylistChange={handlePlaylistChange}
+                isLoadingData={isLoadingAnythingNonAuth}
+                unknownsCount={unknownsCount}
+                onUnknownsClick={handleUnknownsClick}
             />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+
+            <main className="flex flex-grow pt-[55px]">
+                <div className="relative flex-grow">
+                    {/* Conditional rendering for map and legend */}
+                    {(currentTracks.length > 0 || isLoadingAnythingNonAuth ) ? (
+                        <>
+                            <MapComponent
+                                countrySongCounts={countrySongCounts}
+                                onCountryClick={handleCountryClick}
+                            />
+                            {/* Ensure legendItems is not empty before rendering MapLegend */}
+                            {legendItems.length > 0 && <MapLegend legendItems={legendItems} />}
+                        </>
+                    ) : (
+                         <div className="flex h-full w-full items-center justify-center border-nb-thick border-dashed border-nb-border/50 p-nb-lg text-center text-nb-text/70">
+                            <p>Select "Liked Songs" or a playlist from the top menu to begin exploring your music map!</p>
+                        </div>
+                    )}
+
+                    <UnknownsPanel
+                        isOpen={isUnknownsWindowOpen}
+                        onClose={() => setIsUnknownsWindowOpen(false)}
+                        unknownsList={unknownsList}
+                    />
+                    {/* No StatusOverlay as per your request */}
+                </div>
+            </main>
+
+            <CountryDetailsPanel
+                isOpen={isCountryPanelOpen}
+                onClose={closeCountryPanel}
+                details={selectedCountryDetails}
+                onPlaySong={handlePlaySong}
+                onPlayCountrySongsRandomly={handlePlayCountrySongsRandomly}
+                onSavePlaylist={handleSaveCountrySongsToPlaylist}
+                playbackLoading={playbackLoading}
+                playbackError={playbackError}
+                isCreatingPlaylist={isCreatingPlaylist}
+                playlistCreationStatus={playlistCreationStatus}
+            />
         </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+    );
 }

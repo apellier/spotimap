@@ -1,0 +1,97 @@
+/* src/components/TopMenu.module.css */
+/* Most styles are now handled by Tailwind utilities or global styles in globals.css */
+
+/* Base style for buttons within the top menu - make them less prominent than page buttons */
+/* These styles ensure they fit the neobrutalist theme when not using the global .btn */
+.menuItemButton {
+  background-color: var(--bg-primary); /* Or transparent if preferred initially */
+  color: var(--text-primary);
+  border: var(--nb-border-width) solid var(--border-primary); /* Consistent border */
+  box-shadow: var(--nb-shadow); /* Consistent shadow */
+  /* Padding, font-size, etc., will be handled by Tailwind utilities for flexibility */
+  border-radius: var(--nb-radius);
+  text-transform: uppercase;
+  letter-spacing: var(--nb-wide); /* Using var from globals.css or tw class */
+  transition: all 0.1s ease-out;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.menuItemButton:hover:not(:disabled) {
+  background-color: var(--accent-primary);
+  color: var(--text-on-accent);
+  border-color: var(--accent-primary);
+  /* box-shadow: var(--nb-shadow-accent); */ /* Shadow can change or stay */
+}
+
+.menuItemButton:active:not(:disabled) {
+  transform: translate(var(--nb-shadow-offset), var(--nb-shadow-offset));
+  box-shadow: var(--nb-shadow-none); /* Or var from globals.css if defined */
+}
+
+.menuItemButton:disabled {
+  background-color: color-mix(in srgb, var(--bg-primary) 80%, var(--text-primary) 20%);
+  color: color-mix(in srgb, var(--text-primary) 60%, var(--bg-primary) 40%);
+  border-color: color-mix(in srgb, var(--border-primary) 60%, var(--bg-primary) 40%);
+  box-shadow: var(--nb-shadow-none);
+  cursor: not-allowed;
+}
+
+/* Sign In Button variant - more prominent */
+.signInButton {
+  composes: menuItemButton; /* Or apply global .btn styles via Tailwind */
+  background-color: var(--accent-primary);
+  color: var(--text-on-accent);
+  border-color: var(--accent-primary);
+  box-shadow: var(--nb-shadow-accent);
+}
+.signInButton:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent-primary) 85%, black 15%); /* Slightly darken */
+  border-color: color-mix(in srgb, var(--accent-primary) 85%, black 15%);
+}
+
+
+/* Sign Out Button - destructive variant */
+.signOutButton {
+  composes: menuItemButton;
+  background-color: var(--accent-destructive);
+  color: var(--text-on-destructive);
+  border-color: var(--accent-destructive);
+  box-shadow: var(--nb-shadow-destructive);
+}
+.signOutButton:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent-destructive) 85%, black 15%);
+  border-color: color-mix(in srgb, var(--accent-destructive) 85%, black 15%);
+}
+
+/* Active source button */
+.sourceButtonActive {
+  composes: menuItemButton;
+  background-color: var(--accent-primary);
+  color: var(--text-on-accent);
+  border-color: var(--accent-primary);
+  /* box-shadow: var(--nb-shadow-accent); */ /* Shadow could be more subtle here if active */
+}
+.sourceButtonActive:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent-primary) 85%, black 15%);
+  border-color: color-mix(in srgb, var(--accent-primary) 85%, black 15%);
+}
+
+
+/* Minimal style for the select wrapper if needed,
+   but prefer styling the select element directly via globals.css or Tailwind */
+.playlistSelect {
+  /* The select itself is styled globally by @layer base in globals.css */
+  /* This class is applied to the <select> element */
+  /* Add specific overrides for TopMenu context if global styles aren't enough */
+  @apply px-nb-sm py-[5px] text-xs font-semibold uppercase max-w-[220px];
+  /* approx height matching buttons, using Tailwind JIT for py value calculation from calc() might be tricky */
+  /* Ensure it uses the global neobrutalist input styles */
+}
+
+/* Icon for theme toggle */
+.themeIcon {
+  /* SVG icons used directly, Tailwind can control size and color via parent or direct classes */
+  @apply w-5 h-5 block; /* Using Tailwind for size and display */
+  color: var(--text-primary); /* Or use text-nb-text from Tailwind config */
+}

@@ -1,168 +1,312 @@
-.page {
-  --gray-rgb: 0, 0, 0;
-  --gray-alpha-200: rgba(var(--gray-rgb), 0.08);
-  --gray-alpha-100: rgba(var(--gray-rgb), 0.05);
+/* src/app/page.module.css */
 
-  --button-primary-hover: #383838;
-  --button-secondary-hover: #f2f2f2;
-
-  display: grid;
-  grid-template-rows: 20px 1fr 20px;
-  align-items: center;
-  justify-items: center;
-  min-height: 100svh;
-  padding: 80px;
-  gap: 64px;
-  font-family: var(--font-geist-sans);
-}
-
-@media (prefers-color-scheme: dark) {
-  .page {
-    --gray-rgb: 255, 255, 255;
-    --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
-    --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
-
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
-  }
-}
-
-.main {
+/* --- Base Page Structure --- */
+.pageFullStatus, /* For "Authenticating..." */
+.loginContent {
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  grid-row-start: 2;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 70px); /* Adjust if TopMenu height changes */
+  padding: var(--spacing-lg);
+  text-align: center;
+}
+.loginContent h1 {
+  font-size: 2.5rem; /* Example size, adjust as needed */
+  margin-bottom: var(--spacing-md);
+}
+.loginContent p {
+  font-size: 1.1rem;
+  margin-bottom: var(--spacing-lg);
 }
 
-.main ol {
-  font-family: var(--font-geist-mono);
-  padding-left: 0;
-  margin: 0;
-  font-size: 14px;
-  line-height: 24px;
-  letter-spacing: -0.01em;
-  list-style-position: inside;
-}
-
-.main li:not(:last-of-type) {
-  margin-bottom: 8px;
-}
-
-.main code {
-  font-family: inherit;
-  background: var(--gray-alpha-100);
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-weight: 600;
-}
-
-.ctas {
+.appContainer {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
-.ctas a {
-  appearance: none;
-  border-radius: 128px;
-  height: 48px;
-  padding: 0 20px;
-  border: none;
-  border: 1px solid transparent;
-  transition:
-    background 0.2s,
-    color 0.2s,
-    border-color 0.2s;
-  cursor: pointer;
+.mainContentArea {
+  flex-grow: 1;
+  display: flex;
+  position: relative; /* For absolutely positioned children like legend/panels */
+  padding-top: 55px; /* Height of fixed TopMenu from its own CSS */
+  overflow: hidden;
+}
+
+.mapContainer {
+  flex-grow: 1;
+  height: 100%;
+  position: relative;
+  /* border-right: var(--nb-border-width-thick) solid var(--border-primary); Optional, if a panel is fixed to the side */
+}
+.mapContainer > div[style*="width: 100%"] { /* OL map container */
+  border: none !important;
+  margin-top: 0 !important;
+}
+
+.mapPlaceholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  line-height: 20px;
-  font-weight: 500;
+  height: 100%;
+  width: 100%;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  text-align: center;
+  padding: var(--spacing-lg);
+  border: var(--nb-border-width-thick) dashed color-mix(in srgb, var(--border-primary) 50%, transparent);
 }
 
-a.primary {
-  background: var(--foreground);
-  color: var(--background);
-  gap: 8px;
+/* --- Specific Button Variants (if global .btn isn't enough) --- */
+/* Most buttons should use global .btn style or Tailwind utilities */
+/* .loginButton can be a standard button from globals.css */
+
+/* Play button for individual songs - distinctive small accent button */
+.playButton {
+  background: transparent;
+  border: var(--nb-border-width) solid var(--accent-primary);
+  color: var(--accent-primary);
+  padding: var(--spacing-xs) var(--spacing-sm); /* Smaller padding */
+  margin-left: var(--spacing-sm);
+  border-radius: var(--nb-radius);
+  font-size: 0.9em; /* Adjust for icon or text */
+  line-height: 1;
+  font-weight: 700;
+  box-shadow: 2px 2px 0px var(--accent-primary); /* Specific small shadow */
+  transition: all 0.1s ease-out;
+  cursor: pointer;
+}
+.playButton:hover:not(:disabled) {
+  background-color: var(--accent-primary);
+  color: var(--text-on-accent);
+  box-shadow: 2px 2px 0px var(--border-primary); /* Shadow changes color on hover */
+}
+.playButton:active:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 0px 0px 0px var(--accent-primary);
+}
+.playButton:disabled {
+  background-color: transparent;
+  color: color-mix(in srgb, var(--text-primary) 50%, var(--bg-primary) 50%);
+  border-color: color-mix(in srgb, var(--text-primary) 50%, var(--bg-primary) 50%);
+  box-shadow: 2px 2px 0px color-mix(in srgb, var(--text-primary) 50%, var(--bg-primary) 50%);
+  cursor: not-allowed;
 }
 
-a.secondary {
-  border-color: var(--gray-alpha-200);
-  min-width: 158px;
+/* --- Country Details Panel (Modal) --- */
+.countryPanelOverlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0,0,0,0.5); /* Standard overlay */
+  backdrop-filter: blur(2px);
+  z-index: 1000;
 }
 
-.footer {
-  grid-row-start: 3;
+.countryPanel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--bg-primary);
+  border: var(--nb-border-width-thick) solid var(--border-primary);
+  box-shadow: var(--nb-shadow-offset) var(--nb-shadow-offset) 0 0 var(--border-primary), /* Base shadow */
+              calc(var(--nb-shadow-offset) * 2) calc(var(--nb-shadow-offset) * 2) 0 0 var(--border-primary); /* Larger offset for modal */
+  padding: var(--spacing-lg);
+  width: 90%;
+  max-width: 550px;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: var(--text-primary);
+  border-radius: var(--nb-radius);
+  z-index: 1001;
+}
+
+.countryPanelHeader {
   display: flex;
-  gap: 24px;
-}
-
-.footer a {
-  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  border-bottom: var(--nb-border-width) solid var(--border-primary);
+  padding-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+.countryPanelHeader h3 {
+  margin: 0; /* Remove default heading margin */
+  font-size: 1.6rem;
+  text-transform: uppercase;
 }
 
-.footer img {
-  flex-shrink: 0;
+.countryPanelCloseButton {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 2.5rem;
+  font-weight: 300; /* Lighter weight for '×' */
+  cursor: pointer;
+  line-height: 0.5;
+  padding: 0 var(--spacing-xs);
+  border-radius: var(--nb-radius);
+}
+.countryPanelCloseButton:hover {
+  color: var(--accent-primary);
+  background-color: color-mix(in srgb, var(--bg-primary) 80%, var(--text-primary) 20%);
 }
 
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
-  }
-
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
-  }
-
-  .footer a:hover {
-    text-decoration: underline;
-    text-underline-offset: 4px;
-  }
+.countryPanel p {
+  margin-bottom: var(--spacing-sm);
+  font-size: 1rem;
+}
+.countryPanel p strong {
+  font-weight: 700;
 }
 
-@media (max-width: 600px) {
-  .page {
-    padding: 32px;
-    padding-bottom: 80px;
-  }
+.countryPanelActions {
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+/* .panelButton should use global .btn style */
+/* Example: <button class={`${styles.panelButton} ${globalStyles.btn}`}>Play All</button> */
+/* Or ensure panel buttons are styled by the global 'button' tag style if not using .btn class */
 
-  .main {
-    align-items: center;
-  }
-
-  .main ol {
-    text-align: center;
-  }
-
-  .ctas {
-    flex-direction: column;
-  }
-
-  .ctas a {
-    font-size: 14px;
-    height: 40px;
-    padding: 0 16px;
-  }
-
-  a.secondary {
-    min-width: auto;
-  }
-
-  .footer {
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-  }
+.countryPanelArtistList h4 {
+  margin-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: var(--nb-border-width) solid color-mix(in srgb, var(--border-primary) 50%, transparent);
+  text-transform: uppercase;
+  font-size: 1rem;
+}
+.countryPanelArtistBlock {
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: var(--nb-border-width) dashed color-mix(in srgb, var(--border-primary) 30%, transparent);
+}
+.countryPanelArtistBlock:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.countryPanelArtistBlock h5 {
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.countryPanelArtistBlock ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+.countryPanelSongItem { /* Individual song item in panel */
+  padding: var(--spacing-xs) 0;
+  font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
-  }
+/* --- Status Messages (for playback, playlist creation) --- */
+.statusMessage {
+  margin-top: var(--spacing-md);
+  font-size: 0.9rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--nb-radius);
+  border-style: solid;
+  border-width: var(--nb-border-width);
+  font-weight: 600;
+  text-align: center;
+}
+.statusMessage.error {
+  color: var(--accent-destructive);
+  background-color: var(--bg-primary);
+  border-color: var(--accent-destructive);
+}
+.statusMessage.success {
+  color: var(--accent-primary);
+  background-color: var(--bg-primary);
+  border-color: var(--accent-primary);
+}
+.statusMessage.info {
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  border-color: var(--border-primary);
+}
+
+/* --- Small Info Window (e.g., Unknowns) --- */
+.smallInfoWindow {
+  position: absolute;
+  background-color: var(--bg-primary);
+  border: var(--nb-border-width) solid var(--border-primary);
+  border-radius: var(--nb-radius);
+  box-shadow: var(--nb-shadow);
+  padding: var(--spacing-sm) var(--spacing-md);
+  z-index: 600;
+  max-width: 300px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.unknownsWindow {
+  top: calc(55px + var(--spacing-md)); /* Below top menu + spacing */
+  right: var(--spacing-md);
+  max-height: 40vh;
+}
+
+.smallInfoHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: var(--nb-border-width) solid color-mix(in srgb, var(--border-primary) 50%, transparent);
+}
+.smallInfoHeader h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+/* .smallInfoCloseButton can use .countryPanelCloseButton styles or be simpler */
+.smallInfoCloseButton {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.8rem; /* Slightly smaller X */
+  font-weight: 300;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 var(--spacing-xs);
+}
+.smallInfoCloseButton:hover {
+  color: var(--accent-primary);
+}
+
+.smallInfoContent p {
+  margin-bottom: var(--spacing-xs);
+  line-height: 1.4;
+}
+.smallInfoContent.scrollableContent {
+  max-height: calc(40vh - 80px); /* Adjust based on padding and header */
+  overflow-y: auto;
+  padding-right: var(--spacing-xs); /* For scrollbar */
+}
+.smallInfoContent.scrollableContent ul {
+  list-style: none;
+  padding: 0;
+}
+.smallInfoContent.scrollableContent li {
+  padding: var(--spacing-xs) 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-primary) 20%, transparent);
+}
+.smallInfoContent.scrollableContent li:last-child {
+  border-bottom: none;
+}
+.smallInfoContent.scrollableContent strong { /* Artist name in unknowns */
+  font-weight: 600;
+}
+.smallInfoContent.scrollableContent em { /* Track name in unknowns */
+  color: color-mix(in srgb, var(--text-primary) 70%, var(--bg-primary) 30%);
 }

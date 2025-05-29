@@ -1,0 +1,17 @@
+# docker-compose.yml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15 # Use a recent version
+    restart: always
+    environment:
+      POSTGRES_USER: spotimap_admin      # Choose a username
+      POSTGRES_PASSWORD: test  # Choose a strong password
+      POSTGRES_DB: spotimap # Choose a database name
+    ports:
+      - "5433:5432" # Map local port 5433 to Docker's 5432 (or use 5432:5432 if 5432 is free)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

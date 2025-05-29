@@ -1,0 +1,21 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ArtistCache {
+  id              String   @id @default(cuid()) // Or use auto-increment: Int @id @default(autoincrement())
+  artistNameQuery String   @unique // The name used to query MusicBrainz, make it unique to avoid duplicate entries for the same query
+  mbid            String?  // MusicBrainz ID, optional
+  nameFound       String?  // Actual name found on MusicBrainz, optional
+  countryCode     String?  // 2-letter ISO country code, optional (null if not found)
+  lastFetched     DateTime @default(now()) @updatedAt // When this entry was created/updated
+  source          String   @default("MusicBrainzAPI")
+
+  @@index([artistNameQuery]) // Index for faster lookups
+}

@@ -1,0 +1,50 @@
+/* src/components/MapLegend.module.css */
+.mapLegend {
+  position: absolute;
+  bottom: var(--spacing-md);
+  left: var(--spacing-md);
+  background-color: var(--bg-primary);
+  padding: var(--spacing-sm);
+  border-radius: var(--nb-radius);
+  border: var(--nb-border-width) solid var(--border-primary);
+  box-shadow: var(--nb-shadow);
+  z-index: 500; /* Ensure it's above map tiles */
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  max-width: 180px; /* Adjust as needed */
+}
+
+.legendTitle {
+  margin-top: 0;
+  margin-bottom: var(--spacing-sm);
+  font-weight: 700;
+  text-align: left;
+  font-size: 0.9rem; /* Slightly larger than item labels */
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+.legendItem:last-child {
+  margin-bottom: 0;
+}
+
+.legendColorBox {
+  width: 14px;
+  height: 14px;
+  margin-right: var(--spacing-sm);
+  border: 1px solid var(--stroke-primary); /* Or var(--stroke-secondary) */
+  display: inline-block;
+  flex-shrink: 0;
+  /* backgroundColor is set via inline style in the component */
+}
+
+.legendLabel {
+  flex-grow: 1;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
