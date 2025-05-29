@@ -32,7 +32,7 @@ export const getCountryColor = (count: number, maxCount: number): string => {
         .interpolate(d3.interpolateRgb)
         .clamp(true);
 
-    let fillColor = colorScale(count);
+    const fillColor = colorScale(count);
 
     // Opacity calculation from your example
     const minOpacity = 0.6;
