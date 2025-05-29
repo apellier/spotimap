@@ -1,6 +1,6 @@
 // src/app/api/spotify/playlists/route.ts
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../auth/[...nextauth]/route"; // Your reusable authOptions
+import { authOptions } from "@/lib/authOptions"; // Or the correct path
 import { NextResponse } from "next/server";
 
 // Simplified types for Spotify Playlist objects

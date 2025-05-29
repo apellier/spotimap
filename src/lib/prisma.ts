@@ -1,6 +1,13 @@
 // src/lib/prisma.ts
 import { PrismaClient } from '@prisma/client';
 
+// Extend the NodeJS.Global interface to include 'prisma'
+// Or use 'globalThis' for a more modern approach if preferred by your TS config
+declare global {
+  // eslint-disable-next-line no-var
+  var prisma: PrismaClient | undefined;
+}
+
 let prisma: PrismaClient;
 
 if (process.env.NODE_ENV === 'production') {
@@ -8,10 +15,10 @@ if (process.env.NODE_ENV === 'production') {
 } else {
   // Ensure the prisma instance is re-used during hot-reloading
   // Prevents too many connections during development.
-  if (!global.prisma) {
-    global.prisma = new PrismaClient();
+  if (!globalThis.prisma) {
+    globalThis.prisma = new PrismaClient();
   }
-  prisma = global.prisma;
+  prisma = globalThis.prisma;
 }
 
 export default prisma;

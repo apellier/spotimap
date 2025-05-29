@@ -220,7 +220,7 @@ export default function HomePage() {
             await callSpotifyApi('/me/player/play', 'PUT', session.accessToken, playBody);
         } catch (error: any) { console.error("Error playing country songs randomly:", error); setPlaybackError(error.message || "Failed to play. Ensure Spotify is open & Premium."); }
         finally { setPlaybackLoading(null); }
-     }, [session, selectedCountryDetails, callSpotifyApi]);
+     }, [session, selectedCountryDetails]);
     const handleSaveCountrySongsToPlaylist = useCallback(async () => { 
         if (!session?.accessToken || !selectedCountryDetails || !session.user?.id) { setPlaylistCreationStatus("Auth, country details, or user ID missing."); return; }
         setIsCreatingPlaylist(true); setPlaylistCreationStatus("Creating playlist...");
@@ -236,7 +236,7 @@ export default function HomePage() {
             setPlaylistCreationStatus(`Added ${trackUris.length} songs to "${newPlaylist.name}"!`);
         } catch (error: any) { setPlaylistCreationStatus(`Error: ${error.message || "Failed to save playlist."}`); }
         finally { setIsCreatingPlaylist(false); }
-    }, [session, selectedCountryDetails, callSpotifyApi]);
+    }, [session, selectedCountryDetails]);
 
 
     // --- RENDER LOGIC ---
@@ -265,6 +265,7 @@ export default function HomePage() {
                 selectedPlaylistId={selectedPlaylistId}
                 onPlaylistChange={handlePlaylistChange}
                 isLoadingData={isLoadingAnythingNonAuth}
+                isLoadingPlaylists={isLoadingPlaylists}
                 unknownsCount={unknownsCount}
                 onUnknownsClick={handleUnknownsClick}
             />
@@ -301,7 +302,7 @@ export default function HomePage() {
                 onClose={closeCountryPanel}
                 details={selectedCountryDetails}
                 onPlaySong={handlePlaySong}
-                onPlayCountrySongsRandomly={handlePlayCountrySongsRandomly}
+                onPlayCountryRandomly={handlePlayCountrySongsRandomly}
                 onSavePlaylist={handleSaveCountrySongsToPlaylist}
                 playbackLoading={playbackLoading}
                 playbackError={playbackError}

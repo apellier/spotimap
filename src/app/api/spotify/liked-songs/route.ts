@@ -1,6 +1,6 @@
 // src/app/api/spotify/liked-songs/route.ts
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../auth/[...nextauth]/route"; // Import our reusable authOptions
+import { authOptions } from "@/lib/authOptions"; // Or the correct path
 import { NextResponse } from "next/server";
 
 // Define types for the Spotify API response (simplified)

@@ -1,6 +1,6 @@
 // src/app/api/spotify/playlist-tracks/route.ts
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions"; // Or the correct path
 import { NextRequest, NextResponse } from "next/server";
 
 // Using the same track types as defined in liked-songs route for consistency

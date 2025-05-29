@@ -3,7 +3,6 @@
 
 import React from 'react';
 import TopMenu from './TopMenu'; // Assuming TopMenu is also refactored or can handle logged-out state
-import { useTheme } from '@/contexts/ThemeContext'; // Assuming your theme context
 
 interface LoginScreenProps {
     onSignIn: () => void;
@@ -13,7 +12,7 @@ interface LoginScreenProps {
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onSignIn }) => {
-    const { theme, toggleTheme } = useTheme(); // Get theme for TopMenu
+    //const { theme, toggleTheme } = useTheme(); // Get theme for TopMenu
 
     return (
         // Using Tailwind classes for full-screen flex layout
@@ -21,9 +20,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onSignIn }) => {
             <TopMenu
                 isLoggedIn={false}
                 onSignIn={onSignIn}
-                currentTheme={theme} // Pass theme to TopMenu
-                onToggleTheme={toggleTheme} // Pass toggle function
-                // Provide dummy/empty props for logged-in state features
                 userName={null}
                 onSignOut={() => {}}
                 currentSourceLabel=""
@@ -34,6 +30,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onSignIn }) => {
                 isLoadingData={false}
                 unknownsCount={0}
                 onUnknownsClick={() => {}}
+                isLoadingPlaylists
             />
             <div className="flex flex-grow flex-col items-center justify-center p-nb-lg text-center"> {/* Tailwind for centering */}
                 <h1 className="mb-nb-md text-3xl font-bold text-nb-text md:text-4xl">Spotify Geo Explorer</h1> {/* Tailwind for typography */}
