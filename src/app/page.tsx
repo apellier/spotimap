@@ -3,13 +3,9 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import React, { useState, useEffect, ChangeEvent, useCallback } from "react";
-import * as d3 from 'd3'; // Import D3
-
-// Main styling module for HomePage layout
-//import styles from './page.module.css'; // Assuming Tailwind utility classes are also used directly in JSX
+import * as d3 from 'd3';
 
 // Import Hooks
-//import { useTheme } from '@/contexts/ThemeContext';
 import { useSpotifyData } from '@/hooks/useSpotifyData';
 import { useArtistOrigins } from '@/hooks/useArtistOrigins';
 import { useMapData } from '@/hooks/useMapData';
@@ -21,17 +17,17 @@ import MapLegend from '@/components/MapLegend';
 import LoginScreen from '@/components/LoginScreen';
 import CountryDetailsPanel from '@/components/CountryDetailsPanel';
 import UnknownsPanel from '@/components/UnknownsPanel';
+import StatusLoader from '@/components/StatusLoader'; // Import the new loader
 
 // Import Types
 import { SelectedCountryInfo, Track, LegendItem, ArtistDetail } from '@/types';
 
 // Import Utilities
-import { callSpotifyApi } from '@/lib/spotifyApi'; // Ensure this path is correct
-import { getCountryColor } from '@/utils/mapUtils'; // Ensure this path is correct
+import { callSpotifyApi } from '@/lib/spotifyApi';
+import { getCountryColor } from '@/utils/mapUtils';
 
 export default function HomePage() {
     const { data: session, status: authStatus } = useSession();
-    //const { theme: currentTheme, toggleTheme } = useTheme();
 
     const {
         likedSongs, isLoadingLikedSongs, fetchLikedSongs,
@@ -48,11 +44,8 @@ export default function HomePage() {
         artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList
     } = useArtistOrigins(currentTracks);
 
-    // useMapData hook now primarily handles countrySongCounts and isAggregating
-    // We will handle legendItems generation directly in HomePage for clarity with the D3 logic
     const { countrySongCounts, isAggregating } = useMapData(currentTracks, artistCountries);
     const [legendItems, setLegendItems] = useState<LegendItem[]>([]);
-
 
     // UI Panel/Modal States
     const [isCountryPanelOpen, setIsCountryPanelOpen] = useState(false);
@@ -65,20 +58,54 @@ export default function HomePage() {
     const [playlistCreationStatus, setPlaylistCreationStatus] = useState<string | null>(null);
     const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
 
+    // --- Loader State ---
+    const [loaderMessage, setLoaderMessage] = useState<string | null>(null);
+
+    const isLoadingAnything = authStatus === "loading" || isLoadingLikedSongs || isLoadingPlaylists || isLoadingPlaylistTracks || isLoadingArtistCountries || isAggregating;
+
+    // --- Effect to manage loader messages ---
+    useEffect(() => {
+        if (authStatus === "loading" && !session) {
+            setLoaderMessage("Authenticating...");
+        } else if (isLoadingPlaylists && playlists.length === 0) { // Initial playlist load
+            setLoaderMessage("Fetching your playlists...");
+        } else if (isLoadingLikedSongs) {
+            setLoaderMessage("Fetching your liked songs from Spotify...");
+        } else if (isLoadingPlaylistTracks) {
+            const playlistName = playlists.find(p => p.id === selectedPlaylistId)?.name || "selected playlist";
+            setLoaderMessage(`Fetching tracks for "${playlistName}"...`);
+        } else if (isLoadingArtistCountries) {
+            setLoaderMessage("Retrieving artist origins from MusicBrainz...");
+        } else if (isAggregating) {
+            setLoaderMessage("Aggregating map data...");
+        } else {
+            setLoaderMessage(null); // No loading active
+        }
+    }, [
+        authStatus,
+        session,
+        isLoadingPlaylists,
+        playlists.length,
+        selectedPlaylistId,
+        isLoadingLikedSongs,
+        isLoadingPlaylistTracks,
+        isLoadingArtistCountries,
+        isAggregating,
+        playlists
+    ]);
+
 
     // --- Legend Item Generation (D3-inspired) ---
     useEffect(() => {
         if (countrySongCounts.size === 0 && Array.from(countrySongCounts.values()).every(c => c === 0) && currentTracks.length > 0 && !isLoadingArtistCountries && !isAggregating) {
-             // Only show "0 songs" if tracks are loaded but all counts are zero
             const maxCountForLegend = Math.max(...Array.from(countrySongCounts.values()), 0);
             setLegendItems([{ color: getCountryColor(0, maxCountForLegend), label: "0 songs" }]);
             return;
         }
         if (countrySongCounts.size === 0 && currentTracks.length === 0 && !isLoadingArtistCountries && !isAggregating ) {
-            setLegendItems([]); // Clear legend if no tracks and no counts
+            setLegendItems([]);
             return;
         }
-
 
         const maxCount = Math.max(...Array.from(countrySongCounts.values()), 1);
         const safeMaxCount = Math.max(1, maxCount);
@@ -88,15 +115,14 @@ export default function HomePage() {
         if (midPoint > 1 && midPoint < safeMaxCount) {
             domainPoints = [1, midPoint, safeMaxCount];
         } else if (safeMaxCount === 1) {
-            domainPoints = [1, 1.00001]; // D3 scale needs distinct domain points
+            domainPoints = [1, 1.00001]; 
         }
-        // Ensure domainPoints are sorted and unique if logic gets complex
         domainPoints = [...new Set(domainPoints)].sort((a, b) => a - b);
-        if (domainPoints.length === 1 && domainPoints[0] === 1) domainPoints.push(1.00001); // Handle single point domain for maxCount=1
+        if (domainPoints.length === 1 && domainPoints[0] === 1) domainPoints.push(1.00001);
 
         const legendColorScale = d3.scaleLog<string, string>()
             .domain(domainPoints)
-            .range(["#C7F9CC", "#1ED760", "#00441B"].slice(0, domainPoints.length)) // Ensure range matches domain length
+            .range(["#C7F9CC", "#1ED760", "#00441B"].slice(0, domainPoints.length))
             .interpolate(d3.interpolateRgb)
             .clamp(true);
 
@@ -110,33 +136,26 @@ export default function HomePage() {
         steps = [...new Set(steps.filter(s => s > 0))].sort((a, b) => a - b);
         if (steps.length === 0 && maxCount === 1) steps = [1];
 
-
         const newLegendItems: LegendItem[] = [];
         if (steps.length > 0) {
             steps.forEach((step, index) => {
                 const color = legendColorScale(step);
                 let labelText = `${step}`;
                 if (index === steps.length - 1 && steps.length > 1 && step > (steps[index-1] || 0) ) {
-                    labelText = `${steps[index-1] === 1 ? steps[index-1] : (steps[index-1] || step)}+`; // Use previous step for X+ if not 1
-                    if (steps.length === 1 && step === 1) labelText = "1"; // handle maxCount=1 correctly
-                    else if (steps.length ===1 && step > 1) labelText = "1+"; // If only one step and it's >1
+                    labelText = `${steps[index-1] === 1 ? steps[index-1] : (steps[index-1] || step)}+`;
+                    if (steps.length === 1 && step === 1) labelText = "1";
+                    else if (steps.length ===1 && step > 1) labelText = "1+";
                 }
-                 // Refine label for single value steps
                 if (steps.length === 1 || (index < steps.length -1 && steps[index+1] === step +1 ) ){
                      labelText = `${step}`;
                 }
-
-
                 newLegendItems.push({ color, label: `${labelText} song${(step === 1 && !labelText.endsWith('+')) ? '' : 's'}` });
             });
         }
 
-
-        // Add the "0 songs" entry consistently
-        const zeroColor = getCountryColor(0, maxCount); // Get the defined '0 songs' color
+        const zeroColor = getCountryColor(0, maxCount);
         newLegendItems.unshift({ color: zeroColor, label: "0 songs" });
 
-        // Filter out duplicate labels (e.g., if "1 songs" and "1+ songs" are for the same step value)
         const distinctLegendItems = newLegendItems.reduce((acc, current) => {
             if (!acc.find(item => item.label.toLowerCase() === current.label.toLowerCase())) {
                 acc.push(current);
@@ -146,9 +165,8 @@ export default function HomePage() {
 
         setLegendItems(distinctLegendItems);
 
-    }, [countrySongCounts, currentTracks.length, isLoadingArtistCountries, isAggregating]); // Added dependencies
+    }, [countrySongCounts, currentTracks.length, isLoadingArtistCountries, isAggregating]);
 
-    // --- UI Handlers (fetchLikedSongs, handlePlaylistChange, etc. - Keep from your previous working version) ---
     const handleFetchLikedSongs = useCallback(() => {
         setIsCountryPanelOpen(false); setIsUnknownsWindowOpen(false); setPlaybackError(null); setPlaylistCreationStatus(null);
         fetchLikedSongs();
@@ -165,9 +183,6 @@ export default function HomePage() {
             setCurrentSourceLabel(playlist ? playlist.name : "Selected Playlist");
         } else {
             setCurrentSourceLabel("Select Source");
-            // Clear specific track data; currentTracks will default to likedSongs
-            // (useSpotifyData hook handles clearing the other list type internally)
-            // setPlaylistTracks([]); // If useSpotifyData doesn't clear it
         }
     }, [fetchTracksForPlaylist, playlists]);
 
@@ -202,6 +217,7 @@ export default function HomePage() {
         catch (error: any) { setPlaybackError(error.message || "Failed to play song."); }
         finally { setPlaybackLoading(null); }
     }, [session]);
+
     const handlePlayCountrySongsRandomly = useCallback(async () => { 
         if (!session?.accessToken || !selectedCountryDetails) { setPlaybackError("Auth or country details missing."); setPlaybackLoading(null); return; }
         setPlaybackLoading("country-random"); setPlaybackError(null); setPlaylistCreationStatus(null);
@@ -221,6 +237,7 @@ export default function HomePage() {
         } catch (error: any) { console.error("Error playing country songs randomly:", error); setPlaybackError(error.message || "Failed to play. Ensure Spotify is open & Premium."); }
         finally { setPlaybackLoading(null); }
      }, [session, selectedCountryDetails]);
+
     const handleSaveCountrySongsToPlaylist = useCallback(async () => { 
         if (!session?.accessToken || !selectedCountryDetails || !session.user?.id) { setPlaylistCreationStatus("Auth, country details, or user ID missing."); return; }
         setIsCreatingPlaylist(true); setPlaylistCreationStatus("Creating playlist...");
@@ -238,33 +255,34 @@ export default function HomePage() {
         finally { setIsCreatingPlaylist(false); }
     }, [session, selectedCountryDetails]);
 
-
     // --- RENDER LOGIC ---
-    if (authStatus === "loading" && !session) {
-        return <div className="flex min-h-screen items-center justify-center text-lg text-nb-text/70">Authenticating...</div>;
+    // Initial auth check without loader message, handled by the useEffect above
+    if (authStatus === "loading" && !session && !loaderMessage) {
+      return <div className="flex min-h-screen items-center justify-center text-lg text-nb-text/70">Authenticating...</div>;
     }
-
+    
     if (!session) {
         return <LoginScreen onSignIn={() => signIn("spotify")} />;
     }
 
-    const isLoadingAnythingNonAuth = isLoadingLikedSongs || isLoadingPlaylists || isLoadingPlaylistTracks || isLoadingArtistCountries || isAggregating;
+    const displayContent = !isLoadingAnything || (isLoadingPlaylists && playlists.length > 0);
+
 
     return (
         <div className="flex min-h-screen flex-col bg-nb-bg text-nb-text">
+            {loaderMessage && <StatusLoader message={loaderMessage} />} {/* Render loader if message exists */}
+            
             <TopMenu
                 isLoggedIn={!!session}
                 userName={session.user?.name}
                 onSignOut={() => signOut()}
                 onSignIn={() => signIn("spotify")}
-                // currentTheme={currentTheme} // Provided by useTheme directly in TopMenu
-                // onToggleTheme={toggleTheme} // Provided by useTheme directly in TopMenu
                 currentSourceLabel={currentSourceLabel}
                 onFetchLikedSongs={handleFetchLikedSongs}
                 playlists={playlists}
                 selectedPlaylistId={selectedPlaylistId}
                 onPlaylistChange={handlePlaylistChange}
-                isLoadingData={isLoadingAnythingNonAuth}
+                isLoadingData={isLoadingLikedSongs || isLoadingPlaylistTracks || isLoadingArtistCountries || isAggregating}
                 isLoadingPlaylists={isLoadingPlaylists}
                 unknownsCount={unknownsCount}
                 onUnknownsClick={handleUnknownsClick}
@@ -272,20 +290,20 @@ export default function HomePage() {
 
             <main className="flex flex-grow pt-[55px]">
                 <div className="relative flex-grow">
-                    {/* Conditional rendering for map and legend */}
-                    {(currentTracks.length > 0 || isLoadingAnythingNonAuth ) ? (
+                    {(currentTracks.length > 0 || isLoadingLikedSongs || isLoadingPlaylistTracks || (isLoadingPlaylists && playlists.length ===0) ) ? ( // Show map area if loading tracks or tracks exist
                         <>
                             <MapComponent
                                 countrySongCounts={countrySongCounts}
                                 onCountryClick={handleCountryClick}
                             />
-                            {/* Ensure legendItems is not empty before rendering MapLegend */}
                             {legendItems.length > 0 && <MapLegend legendItems={legendItems} />}
                         </>
                     ) : (
-                         <div className="flex h-full w-full items-center justify-center border-nb-thick border-dashed border-nb-border/50 p-nb-lg text-center text-nb-text/70">
-                            <p>Select &quot;Liked Songs&quot; or a playlist from the top menu to begin exploring your music map!</p>
-                        </div>
+                         !loaderMessage && ( // Only show placeholder if no loader is active
+                            <div className="flex h-full w-full items-center justify-center border-nb-thick border-dashed border-nb-border/50 p-nb-lg text-center text-nb-text/70">
+                                <p>Select &quot;Liked Songs&quot; or a playlist from the top menu to begin exploring your music map!</p>
+                            </div>
+                         )
                     )}
 
                     <UnknownsPanel
@@ -293,7 +311,6 @@ export default function HomePage() {
                         onClose={() => setIsUnknownsWindowOpen(false)}
                         unknownsList={unknownsList}
                     />
-                    {/* No StatusOverlay as per your request */}
                 </div>
             </main>
 
