@@ -56,7 +56,7 @@ export default function HomePage() {
     const currentTracks: Array<{ track: Track }> = selectedPlaylistId ? playlistTracks : likedSongs; //
 
     const {
-        artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList, totalUniqueArtistsInCurrentSet //
+        artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList, totalUniqueArtistsInCurrentSet, processedArtistCountForLoader //
     } = useArtistOrigins(currentTracks); //
 
     const { countrySongCounts, isAggregating } = useMapData(currentTracks, artistCountries, isLoadingArtistCountries); //
@@ -96,20 +96,20 @@ export default function HomePage() {
     useEffect(() => {
         if (authStatus === "loading" && !session) {
             setLoaderMessage("Authenticating...");
-        } else if (isLoadingPlaylists && playlists.length === 0) { //
+        } else if (isLoadingPlaylists && playlists.length === 0) {
             setLoaderMessage("Fetching your playlists from Spotify...");
-        } else if (isLoadingLikedSongs) { //
+        } else if (isLoadingLikedSongs) {
             setLoaderMessage("Fetching your liked songs from Spotify...");
-        } else if (isLoadingPlaylistTracks) { //
-            const playlistName = playlists.find(p => p.id === selectedPlaylistId)?.name || "selected playlist"; //
-            const totalTracksInPlaylist = playlists.find(p => p.id === selectedPlaylistId)?.tracks.total || 0; //
+        } else if (isLoadingPlaylistTracks) {
+            const playlistName = playlists.find(p => p.id === selectedPlaylistId)?.name || "selected playlist";
+            const totalTracksInPlaylist = playlists.find(p => p.id === selectedPlaylistId)?.tracks.total || 0;
             setLoaderMessage(`Fetching ${totalTracksInPlaylist > 0 ? totalTracksInPlaylist : ''} tracks for "${playlistName}"...`);
-        } else if (currentTracks.length > 0 && isLoadingArtistCountries) { //
-            const processedArtistCount = artistCountries.size; //
+        } else if (currentTracks.length > 0 && isLoadingArtistCountries) {
+            // Use processedArtistCountForLoader for incremental progress in message
             setLoaderMessage(
-                `Processing ${currentTracks.length} songs: Retrieving artist origins (${processedArtistCount}/${totalUniqueArtistsToProcess} artists)...`
+                `Processing ${currentTracks.length} songs: Retrieving artist origins (${processedArtistCountForLoader}/${totalUniqueArtistsInCurrentSet} artists)...`
             );
-        } else if (currentTracks.length > 0 && !isLoadingArtistCountries && isAggregating) { //
+        } else if (currentTracks.length > 0 && !isLoadingArtistCountries && isAggregating) {
             setLoaderMessage(`Processing ${currentTracks.length} songs: Aggregating map data...`);
         } else {
             setLoaderMessage(null); // No loading active
@@ -119,8 +119,8 @@ export default function HomePage() {
         isLoadingPlaylists, playlists, selectedPlaylistId,
         isLoadingLikedSongs,
         isLoadingPlaylistTracks,
-        currentTracks.length, 
-        isLoadingArtistCountries, artistCountries.size, totalUniqueArtistsToProcess,
+        currentTracks.length,
+        isLoadingArtistCountries, processedArtistCountForLoader, totalUniqueArtistsInCurrentSet, // Use new progress count
         isAggregating
     ]);
 
