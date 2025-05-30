@@ -2,7 +2,8 @@
 "use client";
 
 import React from 'react';
-import styles from './TopMenu.module.css';
+// styles import is not strictly needed if all styles are via Tailwind or global
+// import styles from './TopMenu.module.css'; 
 import { useTheme } from '@/contexts/ThemeContext';
 import { SunIcon, MoonIcon } from '@heroicons/react/24/outline';
 import { PlaylistItem } from '@/types';
@@ -26,67 +27,63 @@ interface TopMenuProps {
 const TopMenu: React.FC<TopMenuProps> = ({
     isLoggedIn, userName, onSignOut, onSignIn,
     currentSourceLabel, onFetchLikedSongs, playlists, selectedPlaylistId, onPlaylistChange,
-    isLoadingData, isLoadingPlaylists, // Destructure new prop
+    isLoadingData, isLoadingPlaylists,
     unknownsCount, onUnknownsClick
 }) => {
     const { theme: currentTheme, toggleTheme: onToggleTheme } = useTheme();
-    const baseButtonTwClasses = "px-nb-sm py-[5px] text-xs font-semibold";
 
     return (
-        <nav className="fixed top-0 left-0 z-[900] flex h-[55px] w-full items-center justify-between border-b border-nb-border bg-nb-bg px-nb-md shadow-nb">
+        <nav className="fixed top-0 left-0 z-[900] flex flex-wrap items-center justify-between gap-y-2 border-b border-nb-border bg-nb-bg px-nb-sm py-2 shadow-nb sm:h-[55px] sm:flex-nowrap sm:px-nb-md sm:py-0">
             {/* Left Section */}
-            <div className="flex items-center gap-nb-sm">
+            <div className="flex items-center gap-nb-xs sm:gap-nb-sm">
                 {isLoggedIn && (
                     <>
                         <span className="mr-nb-xs whitespace-nowrap text-xs text-nb-text/70">
-                            Bienvenue {userName || 'User'}!
+                            <span className="hidden xs:inline">Welcome </span>{userName || 'User'}!
                         </span>
                         <button
                             onClick={onSignOut}
                             className={`btn btn-destructive px-nb-sm py-1 text-xs`}
                         >
-                            Déconnexion
+                            Sign out
                         </button>
                     </>
                 )}
             </div>
 
             {/* Center Section */}
-            <div className="flex flex-grow items-center justify-center gap-nb-sm">
-                {isLoggedIn && (
-                    <>
-                        <span className="mr-nb-xs text-xs uppercase text-nb-text/70">
-                            Afficher :
-                        </span>
-                        <button
-                            onClick={onFetchLikedSongs}
-                            className={`btn px-nb-sm py-1 text-xs ${currentSourceLabel === "Liked Songs" ? 'btn-accent' : 'btn-outline'}`}
-                            disabled={isLoadingData}
-                        >
-                            Titres Likés
-                        </button>
-                        <select
-                            value={selectedPlaylistId}
-                            onChange={onPlaylistChange}
-                            disabled={isLoadingData || (!isLoadingPlaylists && playlists.length === 0)} // Disable if generally loading OR specifically no playlists and not loading them
-                            className="max-w-[200px] px-nb-sm py-[7px] text-xs uppercase"
-                        >
-                            {/* Use isLoadingPlaylists for specific loading text here */}
-                            <option value="">
-                                {isLoadingPlaylists ? "Chargement Playlists..." : (playlists.length === 0 ? "Aucune Playlist" : "Choisir une Playlist...")}
+            {isLoggedIn && (
+                 <div className="order-last flex w-full flex-col items-stretch gap-nb-sm sm:order-none sm:w-auto sm:flex-row sm:flex-grow sm:items-center sm:justify-center sm:gap-nb-sm">
+                    <span className="mr-nb-xs hidden text-xs uppercase text-nb-text/70 sm:inline-block">
+                        Display :
+                    </span>
+                    <button
+                        onClick={onFetchLikedSongs}
+                        className={`btn w-full px-nb-sm py-1 text-xs sm:w-auto ${currentSourceLabel === "Liked Songs" ? 'btn-accent' : 'btn-outline'}`}
+                        disabled={isLoadingData}
+                    >
+                        Liked songs
+                    </button>
+                    <select
+                        value={selectedPlaylistId}
+                        onChange={onPlaylistChange}
+                        disabled={isLoadingData || (!isLoadingPlaylists && playlists.length === 0)}
+                        className="w-full px-nb-sm py-[7px] text-xs uppercase sm:max-w-[200px] md:max-w-[220px]"
+                    >
+                        <option value="">
+                            {isLoadingPlaylists ? "Loading Playlists..." : (playlists.length === 0 ? "No Playlist" : "Choose a Playlist...")}
+                        </option>
+                        {playlists.map((playlist) => (
+                            <option key={playlist.id} value={playlist.id}>
+                                {playlist.name} ({playlist.tracks.total})
                             </option>
-                            {playlists.map((playlist) => (
-                                <option key={playlist.id} value={playlist.id}>
-                                    {playlist.name} ({playlist.tracks.total})
-                                </option>
-                            ))}
-                        </select>
-                    </>
-                )}
-            </div>
+                        ))}
+                    </select>
+                </div>
+            )}
 
-            {/* Right Section (as before, using isLoadingData for general disable state) */}
-            <div className="flex items-center gap-nb-sm">
+            {/* Right Section */}
+            <div className="flex items-center gap-nb-xs sm:gap-nb-sm">
                  {isLoggedIn && (
                     <button
                         onClick={onUnknownsClick}
