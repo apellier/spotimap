@@ -2,8 +2,6 @@
 "use client";
 
 import React from 'react';
-// styles import is not strictly needed if all styles are via Tailwind or global
-// import styles from './TopMenu.module.css'; 
 import { useTheme } from '@/contexts/ThemeContext';
 import { SunIcon, MoonIcon } from '@heroicons/react/24/outline';
 import { PlaylistItem } from '@/types';
@@ -18,8 +16,8 @@ interface TopMenuProps {
     playlists: PlaylistItem[];
     selectedPlaylistId: string;
     onPlaylistChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
-    isLoadingData: boolean; // General loading state for disabling buttons
-    isLoadingPlaylists: boolean; // Specific loading state for playlist dropdown text
+    isLoadingData: boolean;
+    isLoadingPlaylists: boolean;
     unknownsCount: number;
     onUnknownsClick: () => void;
 }
@@ -39,13 +37,14 @@ const TopMenu: React.FC<TopMenuProps> = ({
                 {isLoggedIn && (
                     <>
                         <span className="mr-nb-xs whitespace-nowrap text-xs text-nb-text/70">
-                            <span className="hidden xs:inline">Welcome </span>{userName || 'User'}!
+                            {/* Corrected: hidden on base (mobile), inline from sm up */}
+                            <span className="hidden sm:inline">Bienvenue </span>{userName || 'User'}!
                         </span>
                         <button
                             onClick={onSignOut}
                             className={`btn btn-destructive px-nb-sm py-1 text-xs`}
                         >
-                            Sign out
+                            Déconnexion
                         </button>
                     </>
                 )}
@@ -53,16 +52,18 @@ const TopMenu: React.FC<TopMenuProps> = ({
 
             {/* Center Section */}
             {isLoggedIn && (
-                 <div className="order-last flex w-full flex-col items-stretch gap-nb-sm sm:order-none sm:w-auto sm:flex-row sm:flex-grow sm:items-center sm:justify-center sm:gap-nb-sm">
-                    <span className="mr-nb-xs hidden text-xs uppercase text-nb-text/70 sm:inline-block">
-                        Display :
+                 <div className="flex w-full flex-col items-stretch gap-nb-sm order-last
+                               sm:order-none sm:w-auto sm:flex-row sm:flex-grow sm:items-center sm:justify-center sm:gap-nb-sm">
+                    {/* Label "Afficher :" for desktop */}
+                    <span className="hidden text-xs uppercase text-nb-text/70 sm:inline-block sm:mr-nb-xs">
+                        Afficher :
                     </span>
                     <button
                         onClick={onFetchLikedSongs}
                         className={`btn w-full px-nb-sm py-1 text-xs sm:w-auto ${currentSourceLabel === "Liked Songs" ? 'btn-accent' : 'btn-outline'}`}
                         disabled={isLoadingData}
                     >
-                        Liked songs
+                        Titres Likés
                     </button>
                     <select
                         value={selectedPlaylistId}
@@ -71,7 +72,7 @@ const TopMenu: React.FC<TopMenuProps> = ({
                         className="w-full px-nb-sm py-[7px] text-xs uppercase sm:max-w-[200px] md:max-w-[220px]"
                     >
                         <option value="">
-                            {isLoadingPlaylists ? "Loading Playlists..." : (playlists.length === 0 ? "No Playlist" : "Choose a Playlist...")}
+                            {isLoadingPlaylists ? "Chargement Playlists..." : (playlists.length === 0 ? "Aucune Playlist" : "Choisir une Playlist...")}
                         </option>
                         {playlists.map((playlist) => (
                             <option key={playlist.id} value={playlist.id}>
