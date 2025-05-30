@@ -14,7 +14,7 @@ import Feature, { FeatureLike } from 'ol/Feature';
 import { Geometry } from 'ol/geom';
 import { Fill, Stroke, Style } from 'ol/style';
 import { getCountryColor } from '@/utils/mapUtils';
-import { MapBrowserEvent } from 'ol';
+import { MapBrowserEvent } from 'ol'; // Default import
 
 interface MapComponentProps {
     countrySongCounts: Map<string, number>;
@@ -32,33 +32,27 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<OlMap | null>(null);
     const vectorLayerRef = useRef<VectorLayer<VectorSource<Feature<Geometry>>> | null>(null);
-    const [maxSongCount, setMaxSongCount] = useState(1); // For styling, derived from countrySongCounts
+    const [maxSongCount, setMaxSongCount] = useState(1);
     const [tooltip, setTooltip] = useState<TooltipInfo>({ visible: false, content: '', x: 0, y: 0 });
 
-    // Effect for deriving maxSongCount from countrySongCounts (for styling)
     useEffect(() => {
         if (countrySongCounts.size > 0) {
             const counts = Array.from(countrySongCounts.values());
             setMaxSongCount(Math.max(...counts, 1));
         } else {
-            setMaxSongCount(1); // Default if no counts
+            setMaxSongCount(1);
         }
     }, [countrySongCounts]);
 
-
-    // Effect for Map Initialization (runs once or if onCountryClick ref changes - which it shouldn't now)
     useEffect(() => {
-        if (!mapElement.current || mapRef.current) { // Prevent re-initialization if map already exists
+        if (!mapElement.current || mapRef.current) {
             return;
         }
-
-        console.log("MapComponent: Initializing OpenLayers Map"); // For debugging
 
         const osmLayer = new TileLayer({ source: new OSM() });
         const initialVectorSource = new VectorSource<Feature<Geometry>>();
         const countriesLayer = new VectorLayer({
             source: initialVectorSource,
-            // Style will be set in the other useEffect
         });
         vectorLayerRef.current = countriesLayer;
 
@@ -83,8 +77,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             })
             .catch(error => console.error("Error loading GeoJSON data:", error));
 
-        // Tooltip and click handlers
-        const pointerMoveHandler = (evt: MapBrowserEvent<any>) => {
+        initialMap.on('pointermove', (evt: MapBrowserEvent<any>) => { // Using <any> for the event type
             if (evt.dragging || !mapRef.current) {
                 setTooltip(prev => ({ ...prev, visible: false }));
                 if (mapElement.current) mapElement.current.style.cursor = '';
@@ -97,19 +90,21 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 const typedFeature = featureAtPixel as Feature<Geometry>;
                 const countryName = typedFeature.get('name') || 'Unknown Country';
                 const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
-                
-                // Use a local ref or state for countrySongCounts for tooltip if needed to avoid map re-init
-                // For now, this is fine as it doesn't change map structure
                 const songCount = isoCode ? (countrySongCounts.get(isoCode) || 0) : 0;
-
 
                 let xCoord = 0;
                 let yCoord = 0;
-                const originalEvent = evt.originalEvent;
+                const originalEvent = evt.originalEvent; // originalEvent is 'any' here
                 if (originalEvent instanceof PointerEvent) {
                     xCoord = originalEvent.pageX;
                     yCoord = originalEvent.pageY;
-                } // ... (rest of coordinate logic)
+                } else if (originalEvent instanceof MouseEvent) { // Fallback for older systems
+                    xCoord = originalEvent.pageX;
+                    yCoord = originalEvent.pageY;
+                } else if (originalEvent instanceof TouchEvent && originalEvent.changedTouches?.length > 0) {
+                    xCoord = originalEvent.changedTouches[0].pageX;
+                    yCoord = originalEvent.changedTouches[0].pageY;
+                }
 
                 setTooltip({
                     visible: true,
@@ -124,10 +119,9 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 setTooltip(prev => ({ ...prev, visible: false }));
                 if (mapElement.current) mapElement.current.style.cursor = '';
             }
-        };
-        initialMap.on('pointermove', pointerMoveHandler);
+        });
 
-        const clickHandler = (evt: MapBrowserEvent<any>) => {
+        initialMap.on('click', (evt: MapBrowserEvent<any>) => { // Using <any> for the event type
             if (!mapRef.current) return;
             const pixel = mapRef.current.getEventPixel(evt.originalEvent);
             mapRef.current.forEachFeatureAtPixel(pixel, (featureAtPixel) => {
@@ -135,50 +129,40 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
                 const countryName = typedFeature.get('name') || 'Unknown';
                 if (isoCode) {
-                    onCountryClick(isoCode, countryName); // onCountryClick is now stable
+                    onCountryClick(isoCode, countryName);
                 }
                 return true; 
             });
-        };
-        initialMap.on('click', clickHandler);
+        });
         
         const mapTargetElement = initialMap.getTargetElement();
         const pointerLeaveListener = () => {
             setTooltip(prev => ({ ...prev, visible: false }));
             if (mapElement.current) mapElement.current.style.cursor = '';
         };
-        if (mapTargetElement instanceof HTMLElement) {
+        if (mapTargetElement instanceof HTMLElement) { // Ensure it's an HTMLElement
             mapTargetElement.addEventListener('pointerleave', pointerLeaveListener);
         }
 
          return () => {
-            console.log("MapComponent: Cleaning up OpenLayers Map"); // For debugging
             if (mapTargetElement instanceof HTMLElement) {
                 mapTargetElement.removeEventListener('pointerleave', pointerLeaveListener);
             }
-            // Clean up listeners from the map instance
             if (mapRef.current) {
-                mapRef.current.un('pointermove', pointerMoveHandler);
-                mapRef.current.un('click', clickHandler);
-                mapRef.current.setTarget(undefined); // Detach map from DOM element
-                // mapRef.current.dispose(); // Use dispose for full cleanup if component truly unmounts and won't be reused soon.
-                                          // For now, setTarget(undefined) is often enough if the component might be re-rendered with a new target.
-                mapRef.current = null; // To allow re-initialization if the component *does* get fully unmounted and remounted.
+                mapRef.current.setTarget(undefined);
+                // mapRef.current.dispose(); // Consider if .dispose() is needed for full cleanup
+                mapRef.current = null;
             }
         };
-    // The main map initialization effect should only depend on things that, when changed,
-    // require a full map re-initialization. `onCountryClick` is now stable.
-    // If `mapElement.current` was somehow changing, that would be an issue, but it shouldn't.
-    }, [onCountryClick, countrySongCounts]); // onCountryClick is now stable
 
-    // Effect for Styling Layer based on countrySongCounts (this is fine to run when counts change)
+    }, [countrySongCounts, onCountryClick]); 
+
     useEffect(() => {
-        if (!vectorLayerRef.current) { // Guard against null ref
+        if (!vectorLayerRef.current || !countrySongCounts || maxSongCount <= 0) {
             return;
         }
-        console.log("MapComponent: Updating styles based on countrySongCounts", countrySongCounts); // For debugging
-
-        const currentMaxForStyle = maxSongCount; // Use the derived maxSongCount
+        const countriesLayer = vectorLayerRef.current;
+        const currentMaxSongCount = maxSongCount;
 
         const countryStyleFunction = (feature: FeatureLike): Style => {
             const typedFeature = feature as Feature<Geometry>;
@@ -186,15 +170,12 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             const songCount = featureIsoCode ? (countrySongCounts.get(featureIsoCode) || 0) : 0;
 
             return new Style({
-                fill: new Fill({ color: getCountryColor(songCount, currentMaxForStyle) }),
+                fill: new Fill({ color: getCountryColor(songCount, currentMaxSongCount) }),
                 stroke: new Stroke({ color: '#BBBBBB', width: 1 }),
             });
         };
-        vectorLayerRef.current.setStyle(countryStyleFunction);
-        vectorLayerRef.current.changed(); // Explicitly tell OpenLayers the layer changed to force redraw of styles
-        if(mapRef.current) mapRef.current.render(); // Force a map render
-        
-    }, [countrySongCounts, maxSongCount]); // maxSongCount is derived from countrySongCounts
+        countriesLayer.setStyle(countryStyleFunction);
+    }, [countrySongCounts, maxSongCount]);
 
 
     return (
