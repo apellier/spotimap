@@ -56,10 +56,10 @@ export default function HomePage() {
     const currentTracks: Array<{ track: Track }> = selectedPlaylistId ? playlistTracks : likedSongs; //
 
     const {
-        artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList //
+        artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList, totalUniqueArtistsInCurrentSet //
     } = useArtistOrigins(currentTracks); //
 
-    const { countrySongCounts, isAggregating } = useMapData(currentTracks, artistCountries); //
+    const { countrySongCounts, isAggregating } = useMapData(currentTracks, artistCountries, isLoadingArtistCountries); //
     const [legendItems, setLegendItems] = useState<LegendItem[]>([]); //
 
 

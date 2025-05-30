@@ -1,30 +1,33 @@
 // src/hooks/useMapData.ts
 import { useState, useEffect, useCallback } from 'react';
-import { Track, LegendItem } from '@/types'; // LegendItem might not be needed here anymore
-// import { getCountryColor } from '@/utils/mapUtils'; // No longer needed here
+import { Track } from '@/types';
 
 export function useMapData(
     currentTracks: Array<{ track: Track }>,
-    artistCountries: Map<string, string | null>
+    artistCountries: Map<string, string | null>,
+    isLoadingOrigins: boolean // Add this new prop
 ) {
     const [countrySongCounts, setCountrySongCounts] = useState<Map<string, number>>(new Map());
     const [isAggregating, setIsAggregating] = useState(false);
 
     const aggregateData = useCallback(() => {
-        setIsAggregating(true);
-        const newCounts = new Map<string, number>();
-        if (currentTracks.length === 0 || artistCountries.size === 0) {
-            setCountrySongCounts(new Map()); // Clear counts if no tracks or no artist countries
+        // Only aggregate if origins are NOT loading and we have tracks and artistCountries
+        if (isLoadingOrigins || currentTracks.length === 0 || artistCountries.size === 0) {
+            if (!isLoadingOrigins && currentTracks.length === 0) { // Clear if no tracks and not loading origins
+                setCountrySongCounts(new Map());
+            }
             setIsAggregating(false);
             return;
         }
+
+        setIsAggregating(true);
+        const newCounts = new Map<string, number>();
         currentTracks.forEach(item => {
             if (item.track?.artists && item.track.artists.length > 0) {
                 const firstArtist = item.track.artists[0];
                 if (firstArtist?.name) {
-                    // Ensure artist name is looked up in lowercase, consistent with how it's stored in artistCountries
                     const countryCode = artistCountries.get(firstArtist.name.toLowerCase());
-                    if (countryCode) { // Ensure countryCode is not null or undefined
+                    if (countryCode) {
                         newCounts.set(countryCode, (newCounts.get(countryCode) || 0) + 1);
                     }
                 }
@@ -32,25 +35,20 @@ export function useMapData(
         });
         setCountrySongCounts(newCounts);
         setIsAggregating(false);
-    }, [currentTracks, artistCountries]);
+    }, [currentTracks, artistCountries, isLoadingOrigins]); // Added isLoadingOrigins
 
     useEffect(() => {
-        // Only aggregate if artistCountries has potentially been populated for the currentTracks
-        // or if currentTracks is empty (to clear counts).
-        if (currentTracks.length === 0) {
-            setCountrySongCounts(new Map()); // Clear counts if no tracks
-            setIsAggregating(false); // Ensure loading state is reset
-        } else if (artistCountries.size > 0 || currentTracks.some(t => t.track?.artists?.[0]?.name && artistCountries.has(t.track.artists[0].name.toLowerCase()))) {
-            // Aggregate if artistCountries is populated or if there's a chance it will be for current tracks.
-            // This condition might need refinement based on when artistCountries is guaranteed to be populated relative to currentTracks.
-            // A simpler approach might be to always call aggregateData and let it handle empty states.
+        // Trigger aggregation only when isLoadingOrigins is false,
+        // or when currentTracks or artistCountries change *while not loading origins*.
+        if (!isLoadingOrigins) {
             aggregateData();
+        } else if (currentTracks.length === 0) { // If tracks are cleared while still theoretically loading origins elsewhere
+            setCountrySongCounts(new Map());
+            setIsAggregating(false);
         }
-        // If currentTracks has items but artistCountries is empty and not expected to populate further for these tracks,
-        // counts might remain empty, which is correct.
-    }, [currentTracks, artistCountries, aggregateData]);
+        // If isLoadingOrigins is true, we wait for it to become false before re-aggregating.
+        // The aggregateData function itself also checks isLoadingOrigins.
+    }, [currentTracks, artistCountries, isLoadingOrigins, aggregateData]);
 
-    // Removed the useEffect block for legendItems as it's handled in HomePage.tsx
-
-    return { countrySongCounts, isAggregating }; // Only return what this hook is responsible for
+    return { countrySongCounts, isAggregating };
 }
