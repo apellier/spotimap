@@ -33,7 +33,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onSignIn }) => {
                 isLoadingPlaylists
             />
             <div className="flex flex-grow flex-col items-center justify-center p-nb-lg text-center"> {/* Tailwind for centering */}
-                <h1 className="mb-nb-md text-3xl font-bold text-nb-text md:text-4xl">Spotify Geo Explorer</h1> {/* Tailwind for typography */}
+                <h1 className="mb-nb-md text-3xl font-bold text-nb-text md:text-4xl">SpotiMap</h1> {/* Tailwind for typography */}
                 <p className="mb-nb-lg text-base text-nb-text/80 md:text-lg">
                     Discover the geographic origins of your music.
                 </p>
