@@ -27,6 +27,10 @@ import { SelectedCountryInfo, Track, LegendItem, ArtistDetail } from '@/types'; 
 import { callSpotifyApi } from '@/lib/spotifyApi'; //
 import { getCountryColor } from '@/utils/mapUtils'; //
 
+// Import Vercel analytics
+import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
+
 // Helper function to get unique artists (can be moved to a utils file if preferred)
 const getUniqueFirstArtistsFromTracks = (tracks: Array<{ track: Track }>): string[] => {
     const firstArtists = new Set<string>();
@@ -364,6 +368,8 @@ export default function HomePage() {
                 isCreatingPlaylist={isCreatingPlaylist} //
                 playlistCreationStatus={playlistCreationStatus} //
             />
+            <Analytics />
+            <SpeedInsights />
         </div>
     );
 }
