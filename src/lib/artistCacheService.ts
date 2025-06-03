@@ -2,7 +2,7 @@
 import prisma from './prisma'; // Your Prisma client instance
 import { ArtistCache } from '@prisma/client'; // Import the generated type
 
-const CACHE_VALIDITY_DAYS = 30; // Example: Re-fetch data older than 30 days
+export const CACHE_VALIDITY_DAYS = 30; // Example: Re-fetch data older than 30 days
 
 interface CachedArtistInfoDB {
     country: string | null;
