@@ -26,47 +26,97 @@ export function useArtistOrigins(currentTracks: Array<{track: Track}>) {
             setArtistCountries(new Map()); // Ensure map is cleared if no artists
             setIsLoadingArtistCountries(false);
             setProcessedArtistCountForLoader(0);
+            setTotalUniqueArtistsInCurrentSet(0);
             return;
         }
         setIsLoadingArtistCountries(true);
         setProcessedArtistCountForLoader(0); // Reset progress count at the beginning of fetching a new set
-        const localArtistCountries = new Map<string, string | null>();
-        let currentProcessedCount = 0;
+        setTotalUniqueArtistsInCurrentSet(artistNamesToFetch.length);
 
-        for (const name of artistNamesToFetch) {
-            const nameKey = name.toLowerCase(); // Used for map keys
-            try {
-                // The API route /api/musicbrainz/artist-info already includes a delay.
-                const response = await fetch(`/api/musicbrainz/artist-info?artistName=${encodeURIComponent(name)}`); //
-                if (response.ok) {
-                    const data: ArtistInfoFromAPI = await response.json();
-                    localArtistCountries.set(nameKey, data.country);
-                } else {
-                    console.warn(`Failed to fetch MusicBrainz info for ${name}: ${response.status}`);
-                    localArtistCountries.set(nameKey, null);
-                }
-            } catch (error) {
-                console.error(`Error fetching MusicBrainz info for ${name}:`, error);
-                localArtistCountries.set(nameKey, null); // Store null on error to mark as processed
+        const newArtistCountriesMap = new Map<string, string | null>();
+        let artistsSuccessfullyFetchedFromCache: string[] = [];
+        let artistsToFetchFromMusicBrainz: string[] = [...artistNamesToFetch];
+
+        // Phase 1: Batch fetch from DB cache
+        try {
+            const batchResponse = await fetch('/api/musicbrainz/batch-artist-info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ artistNames: artistNamesToFetch })
+            });
+
+            if (batchResponse.ok) {
+                const cachedData: Record<string, { country: string | null; mbid: string | null; nameFound: string | null; }> = await batchResponse.json();
+                artistsSuccessfullyFetchedFromCache = [];
+                
+                artistNamesToFetch.forEach(name => {
+                    const nameKey = name.toLowerCase();
+                    if (cachedData[nameKey]) {
+                        newArtistCountriesMap.set(nameKey, cachedData[nameKey].country);
+                        artistsSuccessfullyFetchedFromCache.push(name);
+                    }
+                });
+
+                // Update loader count after batch operation
+                setProcessedArtistCountForLoader(artistsSuccessfullyFetchedFromCache.length);
+
+                // Determine artists still needing fetch (not found in cache or stale)
+                artistsToFetchFromMusicBrainz = artistNamesToFetch.filter(
+                    name => !artistsSuccessfullyFetchedFromCache.find(cachedName => cachedName.toLowerCase() === name.toLowerCase())
+                );
+
+            } else {
+                console.warn(`Batch artist info fetch failed (${batchResponse.status}), falling back to individual fetches for all.`);
+                // artistsToFetchFromMusicBrainz remains the full list
             }
-            currentProcessedCount++;
-            setProcessedArtistCountForLoader(currentProcessedCount); // Update progress for loader
+        } catch (e) {
+            console.error("Error in batch artist info fetch:", e);
+            // artistsToFetchFromMusicBrainz remains the full list on error
         }
-        setArtistCountries(localArtistCountries); // Single state update after all fetches in the batch
+        
+        // Phase 2: Fetch remaining artists individually from MusicBrainz
+        if (artistsToFetchFromMusicBrainz.length > 0) {
+            let individualFetchesProcessed = 0;
+            for (const name of artistsToFetchFromMusicBrainz) {
+                const nameKey = name.toLowerCase();
+                // Avoid re-fetching if somehow already processed (shouldn't happen with above logic but as a safeguard)
+                if (newArtistCountriesMap.has(nameKey)) {
+                    individualFetchesProcessed++;
+                    setProcessedArtistCountForLoader(artistsSuccessfullyFetchedFromCache.length + individualFetchesProcessed);
+                    continue;
+                }
+
+                try {
+                    const response = await fetch(`/api/musicbrainz/artist-info?artistName=${encodeURIComponent(name)}`);
+                    if (response.ok) {
+                        const data: ArtistInfoFromAPI = await response.json();
+                        newArtistCountriesMap.set(nameKey, data.country);
+                    } else {
+                        console.warn(`Failed to fetch MusicBrainz info for ${name} (fallback): ${response.status}`);
+                        newArtistCountriesMap.set(nameKey, null); // Explicitly mark as processed with no country
+                    }
+                } catch (error) {
+                    console.error(`Error fetching MusicBrainz info for ${name} (fallback):`, error);
+                    newArtistCountriesMap.set(nameKey, null); // Explicitly mark as processed with no country
+                }
+                individualFetchesProcessed++;
+                setProcessedArtistCountForLoader(artistsSuccessfullyFetchedFromCache.length + individualFetchesProcessed);
+            }
+        }
+
+        setArtistCountries(newArtistCountriesMap);
         setIsLoadingArtistCountries(false);
     }, []);
 
     useEffect(() => {
         // This effect triggers when currentTracks change
         setArtistCountries(new Map()); // Reset origins for new track list
-        setIsLoadingArtistCountries(false);
         setUnknownsCount(0);
         setUnknownsList([]);
         setProcessedArtistCountForLoader(0); // Reset loader progress count
 
         if (currentTracks.length > 0) {
             const uniqueFirstArtists = getUniqueFirstArtistsFromTracks(currentTracks);
-            setTotalUniqueArtistsInCurrentSet(uniqueFirstArtists.length);
             if (uniqueFirstArtists.length > 0) {
                 fetchCountriesForArtists(uniqueFirstArtists);
             } else {
@@ -76,6 +126,7 @@ export function useArtistOrigins(currentTracks: Array<{track: Track}>) {
         } else {
             setTotalUniqueArtistsInCurrentSet(0);
             setIsLoadingArtistCountries(false); // No tracks, so no loading
+            setArtistCountries(new Map());
         }
     }, [currentTracks, fetchCountriesForArtists]);
 
