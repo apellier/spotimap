@@ -26,6 +26,7 @@ interface SpotifyAlbum {
 interface SpotifyTrack {
     id: string;
     name: string;
+    uri: string;
     artists: SpotifyArtist[];
     album: SpotifyAlbum;
     external_urls: { spotify: string };

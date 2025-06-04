@@ -2,501 +2,543 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import React, { useState, useEffect, ChangeEvent, useCallback } from "react";
-import * as d3 from 'd3'; // Import D3
+import React, { useState, useEffect, ChangeEvent, useCallback, useMemo } from "react";
+import * as d3 from 'd3';
 
 // Import Hooks
-//import { useTheme } from '@/contexts/ThemeContext'; // Already handled in TopMenu
-import { useSpotifyData } from '@/hooks/useSpotifyData'; //
-import { useArtistOrigins } from '@/hooks/useArtistOrigins'; //
-import { useMapData } from '@/hooks/useMapData'; //
+import { useSpotifyData } from '@/hooks/useSpotifyData';
+import { useArtistOrigins } from '@/hooks/useArtistOrigins';
+import { useMapData } from '@/hooks/useMapData';
 
 // Import Components
-import TopMenu from '@/components/TopMenu'; //
-import MapComponent from '@/components/MapComponent'; //
-import MapLegend from '@/components/MapLegend'; //
-import LoginScreen from '@/components/LoginScreen'; //
-import CountryDetailsPanel from '@/components/CountryDetailsPanel'; //
-import UnknownsPanel from '@/components/UnknownsPanel'; //
-import StatusLoader from '@/components/StatusLoader'; // Assuming StatusLoader is in this path
+import TopMenu from '@/components/TopMenu';
+import MapComponent from '@/components/MapComponent';
+import MapLegend from '@/components/MapLegend';
+import LoginScreen from '@/components/LoginScreen';
+import CountryDetailsPanel from '@/components/CountryDetailsPanel';
+import UnknownsPanel from '@/components/UnknownsPanel';
+import StatusLoader from '@/components/StatusLoader';
 
 // Import Types
-import { SelectedCountryInfo, Track, LegendItem, ArtistDetail } from '@/types'; //
+import { 
+    SelectedCountryInfo, 
+    Track, 
+    LegendItem, 
+    ArtistDetail, 
+    SelectedCountryBasicInfo, // For multi-select state
+    MultiCountryDisplayInfo   // For multi-select panel data
+} from '@/types';
 
 // Import Utilities
-import { callSpotifyApi } from '@/lib/spotifyApi'; //
-import { getCountryColor } from '@/utils/mapUtils'; //
+import { callSpotifyApi } from '@/lib/spotifyApi';
+import { getCountryColor } from '@/utils/mapUtils';
 
-// Import Vercel analytics
-import { Analytics } from "@vercel/analytics/next"
-import { SpeedInsights } from "@vercel/speed-insights/next"
+// Import Vercel analytics (as in your provided code)
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
-// Helper function to get unique artists (can be moved to a utils file if preferred)
+// Helper function to get unique artists
 const getUniqueFirstArtistsFromTracks = (tracks: Array<{ track: Track }>): string[] => {
     const firstArtists = new Set<string>();
     tracks.forEach(item => {
-        if (item.track?.artists && item.track.artists.length > 0) { //
-            const firstArtist = item.track.artists[0]; //
-            if (firstArtist?.name) firstArtists.add(firstArtist.name.toLowerCase()); // Store lowercase for consistency
+        if (item.track?.artists && item.track.artists.length > 0) {
+            const firstArtist = item.track.artists[0];
+            if (firstArtist?.name) firstArtists.add(firstArtist.name.toLowerCase());
         }
     });
     return Array.from(firstArtists);
 };
 
+// Helper function to get Spotify Device ID (ensure this is defined or imported)
+async function getSpotifyDeviceId(accessToken: string): Promise<string | null> {
+    if (!accessToken) return null;
+    try {
+        const devicesData = await callSpotifyApi('/me/player/devices', 'GET', accessToken);
+        if (devicesData?.devices?.length > 0) {
+            const activeDevice = devicesData.devices.find((d: any) => d.is_active === true);
+            if (activeDevice?.id) return activeDevice.id;
+            if (devicesData.devices[0]?.id) return devicesData.devices[0].id;
+        }
+        return null;
+    } catch (error) {
+        console.warn("Could not fetch Spotify devices:", error instanceof Error ? error.message : String(error));
+        return null;
+    }
+}
+
 
 export default function HomePage() {
     const { data: session, status: authStatus } = useSession();
-    //const { theme: currentTheme, toggleTheme } = useTheme(); // TopMenu handles its own theme via useTheme
 
     const {
-        likedSongs, isLoadingLikedSongs, fetchLikedSongs, //
-        playlists, isLoadingPlaylists, //
-        playlistTracks, isLoadingPlaylistTracks, fetchTracksForPlaylist //
-    } = useSpotifyData(); //
+        likedSongs, isLoadingLikedSongs, fetchLikedSongs,
+        playlists, isLoadingPlaylists,
+        playlistTracks, isLoadingPlaylistTracks, fetchTracksForPlaylist
+    } = useSpotifyData();
 
     const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>("");
     const [currentSourceLabel, setCurrentSourceLabel] = useState<string>("Select Source");
 
-    const currentTracks: Array<{ track: Track }> = selectedPlaylistId ? playlistTracks : likedSongs; //
+    const currentTracks: Array<{ track: Track }> = selectedPlaylistId ? playlistTracks : likedSongs;
 
     const {
-        artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList, totalUniqueArtistsInCurrentSet, processedArtistCountForLoader //
-    } = useArtistOrigins(currentTracks); //
+        artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList, 
+        totalUniqueArtistsInCurrentSet, processedArtistCountForLoader
+    } = useArtistOrigins(currentTracks);
 
-    const { countrySongCounts, isAggregating } = useMapData(currentTracks, artistCountries, isLoadingArtistCountries); //
-    const [legendItems, setLegendItems] = useState<LegendItem[]>([]); //
+    const { countrySongCounts, isAggregating } = useMapData(currentTracks, artistCountries, isLoadingArtistCountries);
+    const [legendItems, setLegendItems] = useState<LegendItem[]>([]);
 
+    // State for single country selection & panel
+    const [singleCountryDetails, setSingleCountryDetails] = useState<SelectedCountryInfo | null>(null);
+    const [isSingleCountryPanelOpen, setIsSingleCountryPanelOpen] = useState(false);
 
-    // UI Panel/Modal States
-    const [isCountryPanelOpen, setIsCountryPanelOpen] = useState(false);
-    const [selectedCountryDetails, setSelectedCountryDetails] = useState<SelectedCountryInfo | null>(null);
+    // State for multi-country selection
+    const [multiSelectedCountries, setMultiSelectedCountries] = useState<SelectedCountryBasicInfo[]>([]);
+    
+    // State for multi-country panel data & visibility
+    const [multiCountryDisplayData, setMultiCountryDisplayData] = useState<MultiCountryDisplayInfo | null>(null);
+    const [isMultiCountryPanelOpen, setIsMultiCountryPanelOpen] = useState(false);
+    
+    // State for unknowns panel
     const [isUnknownsWindowOpen, setIsUnknownsWindowOpen] = useState(false);
 
     // Playback & Playlist Creation States
     const [playbackError, setPlaybackError] = useState<string | null>(null);
-    const [playbackLoading, setPlaybackLoading] = useState<string | null>(null); //
-    const [playlistCreationStatus, setPlaylistCreationStatus] = useState<string | null>(null); //
-    const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false); //
+    const [playbackLoading, setPlaybackLoading] = useState<string | null>(null);
+    const [playlistCreationStatus, setPlaylistCreationStatus] = useState<string | null>(null);
+    const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false);
 
-    // --- Loader State ---
+    // Loader State
     const [loaderMessage, setLoaderMessage] = useState<string | null>(null);
-    const [totalUniqueArtistsToProcess, setTotalUniqueArtistsToProcess] = useState(0);
+    // const [totalUniqueArtistsToProcess, setTotalUniqueArtistsToProcess] = useState(0); // This seemed unused, ensure if needed
 
-    const isLoadingAnythingNonAuth = isLoadingLikedSongs || isLoadingPlaylists || isLoadingPlaylistTracks || isLoadingArtistCountries || isAggregating; //
+    const isLoadingAnythingNonAuth = isLoadingLikedSongs || isLoadingPlaylists || isLoadingPlaylistTracks || isLoadingArtistCountries || isAggregating;
 
-    async function getSpotifyDeviceId(accessToken: string): Promise<string | null> {
-        if (!accessToken) return null;
-        try {
-            const devicesData = await callSpotifyApi('/me/player/devices', 'GET', accessToken); //
-            if (devicesData?.devices?.length > 0) {
-                const activeDevice = devicesData.devices.find((d: any) => d.is_active === true);
-                if (activeDevice?.id) return activeDevice.id;
-                // If no active device, return the first available one
-                if (devicesData.devices[0]?.id) return devicesData.devices[0].id; 
+    const closeAnyPanelAndResets = useCallback(() => {
+        setIsSingleCountryPanelOpen(false);
+        setSingleCountryDetails(null);
+        setIsMultiCountryPanelOpen(false);
+        setMultiCountryDisplayData(null);
+        setMultiSelectedCountries([]);
+        setPlaybackError(null);
+        setPlaylistCreationStatus(null);
+    }, []); // State setters are stable, empty array is fine.
+    
+    const handleMapClick = useCallback((isoCode: string, countryName: string, isShiftKey: boolean) => {
+        if (isShiftKey) {
+            setMultiSelectedCountries(prevSelected => {
+                const existingIndex = prevSelected.findIndex(c => c.isoCode === isoCode);
+                if (existingIndex > -1) {
+                    return prevSelected.filter(c => c.isoCode !== isoCode);
+                } else {
+                    return [...prevSelected, { isoCode, name: countryName }];
+                }
+            });
+            if (isSingleCountryPanelOpen) {
+                setIsSingleCountryPanelOpen(false);
+                setSingleCountryDetails(null);
             }
-            return null;
-        } catch (error) {
-            console.warn("Could not fetch Spotify devices:", error instanceof Error ? error.message : error);
-            return null;
-        }
-    }
-
-    // Update total unique artists when currentTracks change and are about to be processed for origins
-    useEffect(() => {
-        if (currentTracks.length > 0 && !isLoadingLikedSongs && !isLoadingPlaylistTracks) {
-            const uniqueArtists = getUniqueFirstArtistsFromTracks(currentTracks);
-            setTotalUniqueArtistsToProcess(uniqueArtists.length);
+            setIsMultiCountryPanelOpen(false); 
         } else {
-            setTotalUniqueArtistsToProcess(0);
+            setMultiSelectedCountries([]); 
+            setIsMultiCountryPanelOpen(false); 
+            setMultiCountryDisplayData(null);
+
+            const M_songCount = countrySongCounts.get(isoCode.toUpperCase()) || 0;
+            const M_artistsFromCountry: ArtistDetail[] = [];
+            if (M_songCount > 0) {
+                currentTracks.forEach(item => {
+                    if (item.track?.artists?.[0]?.name) {
+                        const firstArtist = item.track.artists[0];
+                        const artistCountry = artistCountries.get(firstArtist.name.toLowerCase());
+                        if (artistCountry?.toUpperCase() === isoCode.toUpperCase()) {
+                            let M_existingArtist = M_artistsFromCountry.find(a => a.name === firstArtist.name);
+                            if (!M_existingArtist) { 
+                                M_existingArtist = { name: firstArtist.name, songs: [] }; 
+                                M_artistsFromCountry.push(M_existingArtist); 
+                            }
+                            if (item.track && !M_existingArtist.songs.some(s => s.id === item.track.id)) {
+                                M_existingArtist.songs.push({ id: item.track.id, name: item.track.name });
+                            }
+                        }
+                    }
+                });
+            }
+            M_artistsFromCountry.sort((a,b) => a.name.localeCompare(b.name)).forEach(a => a.songs.sort((s1,s2)=>s1.name.localeCompare(s2.name)));
+            
+            setSingleCountryDetails({ isoCode, name: countryName, songCount: M_songCount, artists: M_artistsFromCountry });
+            setIsSingleCountryPanelOpen(true);
+            setPlaybackError(null);
+            setPlaylistCreationStatus(null);
         }
-    }, [currentTracks, isLoadingLikedSongs, isLoadingPlaylistTracks]);
+    }, [countrySongCounts, currentTracks, artistCountries, isSingleCountryPanelOpen]);
+    
+    const handleShowMultiCountryDetails = useCallback(() => {
+        if (multiSelectedCountries.length > 0) {
+            const countryInfoForPanel: Array<SelectedCountryBasicInfo & { songCount: number }> = [];
+            let MtotalSongCount = 0;
+            const MartistsMap = new Map<string, ArtistDetail>();
+            const MallTrackUris = new Set<string>();
 
+            multiSelectedCountries.forEach(country => {
+                const upperIsoCode = country.isoCode.toUpperCase();
+                const count = countrySongCounts.get(upperIsoCode) || 0;
+                countryInfoForPanel.push({ ...country, songCount: count });
+                MtotalSongCount += count;
 
-    // --- Effect to manage loader messages ---
-    useEffect(() => {
-        if (authStatus === "loading" && !session) {
-            setLoaderMessage("Authenticating...");
-        } else if (isLoadingPlaylists && playlists.length === 0) {
-            setLoaderMessage("Fetching your playlists from Spotify...");
-        } else if (isLoadingLikedSongs) {
-            setLoaderMessage("Fetching your liked songs from Spotify...");
-        } else if (isLoadingPlaylistTracks) {
-            const playlistName = playlists.find(p => p.id === selectedPlaylistId)?.name || "selected playlist";
-            const totalTracksInPlaylist = playlists.find(p => p.id === selectedPlaylistId)?.tracks.total || 0;
-            setLoaderMessage(`Fetching ${totalTracksInPlaylist > 0 ? totalTracksInPlaylist : ''} tracks for "${playlistName}"...`);
+                currentTracks.forEach(item => {
+                    if (item.track?.artists?.[0]?.name) {
+                        const firstArtist = item.track.artists[0];
+                        const artistOriginCountry = artistCountries.get(firstArtist.name.toLowerCase());
+                        if (artistOriginCountry?.toUpperCase() === upperIsoCode) {
+                            if (item.track.uri) MallTrackUris.add(item.track.uri);
+                            let M_existingArtist = MartistsMap.get(firstArtist.name);
+                            if (!M_existingArtist) {
+                                M_existingArtist = { name: firstArtist.name, songs: [] };
+                                MartistsMap.set(firstArtist.name, M_existingArtist);
+                            }
+                            if (item.track && !M_existingArtist.songs.some(s => s.id === item.track.id)) {
+                                M_existingArtist.songs.push({ id: item.track.id, name: item.track.name });
+                            }
+                        }
+                    }
+                });
+            });
+            const M_finalArtists = Array.from(MartistsMap.values()).sort((a,b) => a.name.localeCompare(b.name));
+            M_finalArtists.forEach(a => a.songs.sort((s1,s2)=>s1.name.localeCompare(s2.name)));
+            
+            setMultiCountryDisplayData({
+                countries: countryInfoForPanel.sort((a,b) => a.name.localeCompare(b.name)),
+                totalSongCount: MtotalSongCount,
+                artists: M_finalArtists,
+                allTrackUris: Array.from(MallTrackUris)
+            });
+            setIsMultiCountryPanelOpen(true);
+            setIsSingleCountryPanelOpen(false); 
+            setSingleCountryDetails(null);
+            setPlaybackError(null);
+            setPlaylistCreationStatus(null);
+        }
+    }, [multiSelectedCountries, countrySongCounts, currentTracks, artistCountries]);
+
+    useEffect(() => { // Loader messages
+        if (authStatus === "loading" && !session) setLoaderMessage("Authenticating...");
+        else if (isLoadingPlaylists && playlists.length === 0) setLoaderMessage("Fetching your playlists from Spotify...");
+        else if (isLoadingLikedSongs) setLoaderMessage("Fetching your liked songs from Spotify...");
+        else if (isLoadingPlaylistTracks) {
+            const pName = playlists.find(p => p.id === selectedPlaylistId)?.name || "selected playlist";
+            const pTotal = playlists.find(p => p.id === selectedPlaylistId)?.tracks.total || 0;
+            setLoaderMessage(`Fetching ${pTotal > 0 ? pTotal : ''} tracks for "${pName}"...`);
         } else if (currentTracks.length > 0 && isLoadingArtistCountries) {
-            // Use processedArtistCountForLoader for incremental progress in message
-            setLoaderMessage(
-                `Processing ${currentTracks.length} songs: Retrieving artist origins (${processedArtistCountForLoader}/${totalUniqueArtistsInCurrentSet} artists)...`
-            );
+            setLoaderMessage(`Processing ${currentTracks.length} songs: Retrieving artist origins (${processedArtistCountForLoader}/${totalUniqueArtistsInCurrentSet} artists)...`);
         } else if (currentTracks.length > 0 && !isLoadingArtistCountries && isAggregating) {
             setLoaderMessage(`Processing ${currentTracks.length} songs: Aggregating map data...`);
+        } else setLoaderMessage(null);
+    }, [authStatus, session, isLoadingPlaylists, playlists, selectedPlaylistId, isLoadingLikedSongs, isLoadingPlaylistTracks, currentTracks.length, isLoadingArtistCountries, processedArtistCountForLoader, totalUniqueArtistsInCurrentSet, isAggregating]);
+
+    useEffect(() => { // Legend items
+        // ... (Legend logic from your provided code - assumed correct and complete)
+        if (countrySongCounts.size === 0 && Array.from(countrySongCounts.values()).every(c => c === 0) && currentTracks.length > 0 && !isLoadingArtistCountries && !isAggregating) {
+            const maxCountForLegend = Math.max(...Array.from(countrySongCounts.values()), 0);
+            setLegendItems([{ color: getCountryColor(0, maxCountForLegend), label: "0 songs" }]);
+            return;
+        }
+        if (countrySongCounts.size === 0 && currentTracks.length === 0 && !isLoadingArtistCountries && !isAggregating ) {
+            setLegendItems([]); 
+            return;
+        }
+        const maxCount = Math.max(...Array.from(countrySongCounts.values()), 1);
+        const safeMaxCount = Math.max(1, maxCount);
+        const midPoint = Math.round(Math.sqrt(safeMaxCount));
+        let domainPoints = [1, safeMaxCount];
+        if (midPoint > 1 && midPoint < safeMaxCount) domainPoints = [1, midPoint, safeMaxCount];
+        else if (safeMaxCount === 1) domainPoints = [1, 1.00001];
+        domainPoints = [...new Set(domainPoints)].sort((a, b) => a - b);
+        if (domainPoints.length === 1 && domainPoints[0] === 1) domainPoints.push(1.00001);
+
+        const legendColorScale = d3.scaleLog<string, string>().domain(domainPoints).range(["#C7F9CC", "#1ED760", "#00441B"].slice(0, domainPoints.length)).interpolate(d3.interpolateRgb).clamp(true);
+        let steps = [1];
+        if (midPoint > 1 && midPoint < maxCount) steps.push(midPoint);
+        if (maxCount > 1) steps.push(maxCount);
+        steps = [...new Set(steps.filter(s => s > 0))].sort((a, b) => a - b);
+        if (steps.length === 0 && maxCount === 1) steps = [1];
+        const newLegendItems: LegendItem[] = [];
+        if (steps.length > 0) {
+            steps.forEach((step, index) => {
+                const color = legendColorScale(step);
+                let labelText = `${step}`;
+                if (index === steps.length - 1 && steps.length > 1 && step > (steps[index-1] || 0) ) {
+                    labelText = `${steps[index-1] === 1 ? steps[index-1] : (steps[index-1] || step)}+`;
+                    if (steps.length === 1 && step === 1) labelText = "1";
+                    else if (steps.length ===1 && step > 1) labelText = "1+";
+                }
+                if (steps.length === 1 || (index < steps.length -1 && steps[index+1] === step +1 ) ){
+                     labelText = `${step}`;
+                }
+                newLegendItems.push({ color, label: `${labelText} song${(step === 1 && !labelText.endsWith('+')) ? '' : 's'}` });
+            });
+        }
+        const zeroColor = getCountryColor(0, maxCount);
+        newLegendItems.unshift({ color: zeroColor, label: "0 songs" });
+        const distinctLegendItems = newLegendItems.reduce((acc, current) => {
+            if (!acc.find(item => item.label.toLowerCase() === current.label.toLowerCase())) acc.push(current);
+            return acc;
+        }, [] as LegendItem[]);
+        setLegendItems(distinctLegendItems);
+    }, [countrySongCounts, currentTracks.length, isLoadingArtistCountries, isAggregating]);
+
+    const handleFetchLikedSongs = useCallback(() => {
+        closeAnyPanelAndResets(); // Close panels when changing source
+        fetchLikedSongs();
+        setSelectedPlaylistId(""); setCurrentSourceLabel("Liked Songs");
+    }, [fetchLikedSongs, closeAnyPanelAndResets]);
+
+    const handlePlaylistChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+        closeAnyPanelAndResets(); // Close panels when changing source
+        const newPlaylistId = event.target.value;
+        setSelectedPlaylistId(newPlaylistId);
+        if (newPlaylistId) {
+            fetchTracksForPlaylist(newPlaylistId);
+            const playlist = playlists.find(p => p.id === newPlaylistId);
+            setCurrentSourceLabel(playlist ? playlist.name : "Selected Playlist");
         } else {
-            setLoaderMessage(null); // No loading active
+            setCurrentSourceLabel("Select Source");
         }
-    }, [
-        authStatus, session,
-        isLoadingPlaylists, playlists, selectedPlaylistId,
-        isLoadingLikedSongs,
-        isLoadingPlaylistTracks,
-        currentTracks.length,
-        isLoadingArtistCountries, processedArtistCountForLoader, totalUniqueArtistsInCurrentSet, // Use new progress count
-        isAggregating
-    ]);
-
-
-    // --- Legend Item Generation (D3-inspired) ---
-    useEffect(() => {
-        if (countrySongCounts.size === 0 && Array.from(countrySongCounts.values()).every(c => c === 0) && currentTracks.length > 0 && !isLoadingArtistCountries && !isAggregating) { //
-             // Only show "0 songs" if tracks are loaded but all counts are zero
-            const maxCountForLegend = Math.max(...Array.from(countrySongCounts.values()), 0); //
-            setLegendItems([{ color: getCountryColor(0, maxCountForLegend), label: "0 songs" }]); //
-            return;
-        }
-        if (countrySongCounts.size === 0 && currentTracks.length === 0 && !isLoadingArtistCountries && !isAggregating ) { //
-            setLegendItems([]); // Clear legend if no tracks and no counts
-            return;
-        }
-
-
-        const maxCount = Math.max(...Array.from(countrySongCounts.values()), 1); //
-        const safeMaxCount = Math.max(1, maxCount); //
-        const midPoint = Math.round(Math.sqrt(safeMaxCount)); //
-
-        let domainPoints = [1, safeMaxCount]; //
-        if (midPoint > 1 && midPoint < safeMaxCount) { //
-            domainPoints = [1, midPoint, safeMaxCount]; //
-        } else if (safeMaxCount === 1) { // Only one song max //
-            domainPoints = [1, 1.00001]; // d3 scale needs distinct domain points //
-        }
-        // Ensure domainPoints are sorted and unique if logic gets complex
-        domainPoints = [...new Set(domainPoints)].sort((a, b) => a - b); //
-        if (domainPoints.length === 1 && domainPoints[0] === 1) domainPoints.push(1.00001); // Handle single point domain for maxCount=1 //
-
-        const legendColorScale = d3.scaleLog<string, string>() //
-            .domain(domainPoints) //
-            .range(["#C7F9CC", "#1ED760", "#00441B"].slice(0, domainPoints.length)) // Ensure range matches domain length //
-            .interpolate(d3.interpolateRgb) //
-            .clamp(true); //
-
-        let steps = [1]; //
-        if (midPoint > 1 && midPoint < maxCount) { //
-            steps.push(midPoint); //
-        }
-        if (maxCount > 1) { //
-            steps.push(maxCount); //
-        }
-        steps = [...new Set(steps.filter(s => s > 0))].sort((a, b) => a - b); //
-        if (steps.length === 0 && maxCount === 1) steps = [1]; //
-
-
-        const newLegendItems: LegendItem[] = []; //
-        if (steps.length > 0) { //
-            steps.forEach((step, index) => { //
-                const color = legendColorScale(step); //
-                let labelText = `${step}`; //
-                if (index === steps.length - 1 && steps.length > 1 && step > (steps[index-1] || 0) ) { //
-                    labelText = `${steps[index-1] === 1 ? steps[index-1] : (steps[index-1] || step)}+`; // Use previous step for X+ if not 1 //
-                    if (steps.length === 1 && step === 1) labelText = "1"; // handle maxCount=1 correctly //
-                    else if (steps.length ===1 && step > 1) labelText = "1+"; // If only one step and it's >1 //
-                }
-                 // Refine label for single value steps
-                if (steps.length === 1 || (index < steps.length -1 && steps[index+1] === step +1 ) ){ //
-                     labelText = `${step}`; //
-                }
-
-
-                newLegendItems.push({ color, label: `${labelText} song${(step === 1 && !labelText.endsWith('+')) ? '' : 's'}` }); //
-            });
-        }
-
-
-        // Add the "0 songs" entry consistently
-        const zeroColor = getCountryColor(0, maxCount); // Get the defined '0 songs' color //
-        newLegendItems.unshift({ color: zeroColor, label: "0 songs" }); //
-
-        // Filter out duplicate labels (e.g., if "1 songs" and "1+ songs" are for the same step value)
-        const distinctLegendItems = newLegendItems.reduce((acc, current) => { //
-            if (!acc.find(item => item.label.toLowerCase() === current.label.toLowerCase())) { //
-                acc.push(current); //
-            }
-            return acc; //
-        }, [] as LegendItem[]); //
-
-        setLegendItems(distinctLegendItems); //
-
-    }, [countrySongCounts, currentTracks.length, isLoadingArtistCountries, isAggregating]); // Added dependencies //
-
-    // --- UI Handlers (fetchLikedSongs, handlePlaylistChange, etc. - Keep from your previous working version) ---
-    const handleFetchLikedSongs = useCallback(() => { //
-        setIsCountryPanelOpen(false); setIsUnknownsWindowOpen(false); setPlaybackError(null); setPlaylistCreationStatus(null); //
-        fetchLikedSongs(); //
-        setSelectedPlaylistId(""); setCurrentSourceLabel("Liked Songs"); //
-    }, [fetchLikedSongs]); //
-
-    const handlePlaylistChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => { //
-        setIsCountryPanelOpen(false); setIsUnknownsWindowOpen(false); setPlaybackError(null); setPlaylistCreationStatus(null); //
-        const newPlaylistId = event.target.value; //
-        setSelectedPlaylistId(newPlaylistId); //
-        if (newPlaylistId) { //
-            fetchTracksForPlaylist(newPlaylistId); //
-            const playlist = playlists.find(p => p.id === newPlaylistId); //
-            setCurrentSourceLabel(playlist ? playlist.name : "Selected Playlist"); //
-        } else { //
-            setCurrentSourceLabel("Select Source"); //
-        }
-    }, [fetchTracksForPlaylist, playlists]); //
-
-    const handleCountryClick = useCallback((isoCode: string, countryNameFromMap: string) => { //
-        const songCount = countrySongCounts.get(isoCode.toUpperCase()) || 0; //
-        const artistsFromCountry: ArtistDetail[] = []; //
-        if (songCount > 0) { //
-            currentTracks.forEach(item => { //
-                if (item.track?.artists?.[0]?.name) { //
-                    const firstArtist = item.track.artists[0]; //
-                    const artistCountry = artistCountries.get(firstArtist.name.toLowerCase()); //
-                    if (artistCountry?.toUpperCase() === isoCode.toUpperCase()) { //
-                        let existingArtist = artistsFromCountry.find(a => a.name === firstArtist.name); //
-                        if (!existingArtist) { existingArtist = { name: firstArtist.name, songs: [] }; artistsFromCountry.push(existingArtist); } //
-                        if (item.track) existingArtist.songs.push({ id: item.track.id, name: item.track.name }); //
-                    }
-                }
-            });
-        }
-        artistsFromCountry.sort((a,b) => a.name.localeCompare(b.name)).forEach(a => a.songs.sort((s1,s2)=>s1.name.localeCompare(s2.name))); //
-        setSelectedCountryDetails({ isoCode, name: countryNameFromMap, songCount, artists: artistsFromCountry }); //
-        setIsCountryPanelOpen(true); setPlaybackError(null); setPlaylistCreationStatus(null); //
-    }, [countrySongCounts, currentTracks, artistCountries]); //
-
-    const handleUnknownsClick = () => setIsUnknownsWindowOpen(prev => !prev); //
-    const closeCountryPanel = useCallback(() => { // Ensure closeCountryPanel is memoized if it's a dependency elsewhere
-        setIsCountryPanelOpen(false); 
-        setPlaybackError(null); 
-        setPlaylistCreationStatus(null);
-    }, []);
-    const closeUnknownsPanel = useCallback(() => {
-        setIsUnknownsWindowOpen(false);
-    }, []);
-
-    useEffect(() => {
+    }, [fetchTracksForPlaylist, playlists, closeAnyPanelAndResets]);
+    
+    useEffect(() => { // "Esc" key handler
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                if (isCountryPanelOpen) {
-                    closeCountryPanel();
+                if (isMultiCountryPanelOpen || isSingleCountryPanelOpen) {
+                    closeAnyPanelAndResets();
                 } else if (isUnknownsWindowOpen) {
-                    // Assuming UnknownsPanel is closed by directly setting its state
-                    closeUnknownsPanel();
+                    setIsUnknownsWindowOpen(false);
+                } else if (multiSelectedCountries.length > 0) {
+                    setMultiSelectedCountries([]);
                 }
             }
         };
-
         document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isSingleCountryPanelOpen, isMultiCountryPanelOpen, isUnknownsWindowOpen, multiSelectedCountries.length, closeAnyPanelAndResets]);
 
-        // Cleanup function to remove the event listener when the component unmounts
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [isCountryPanelOpen, isUnknownsWindowOpen, closeCountryPanel, closeUnknownsPanel]);
-
-
-    const handlePlaySong = useCallback(async (trackId: string) => {
+    // Highlight logic: only for multi-selection
+    const codesToHighlightOnMap = useMemo(() => {
+        return multiSelectedCountries.length > 0
+            ? multiSelectedCountries.map(c => c.isoCode)
+            : []; // This empty array reference will now be stable if multiSelectedCountries remains empty
+    }, [multiSelectedCountries]);
+    
+    const handlePlaySong = useCallback(async (trackId: string) => { /* ... (from previous response, uses getSpotifyDeviceId) ... */ 
         if (!session?.accessToken || !trackId) {
-            setPlaybackError("Authentication or Track ID missing.");
-            return;
+            setPlaybackError("Authentication or Track ID missing."); return;
         }
-        setPlaybackLoading(trackId);
-        setPlaybackError(null);
-
+        setPlaybackLoading(trackId); setPlaybackError(null);
         try {
             const deviceId = await getSpotifyDeviceId(session.accessToken);
             if (!deviceId) {
                 setPlaybackError("No active Spotify player found. Please open Spotify and play something, or ensure a device is available.");
-                setPlaybackLoading(null);
-                return;
+                setPlaybackLoading(null); return;
             }
-
-            await callSpotifyApi(
-                '/me/player/play', 
-                'PUT', 
-                session.accessToken, 
-                { 
-                    uris: [`spotify:track:${trackId}`],
-                    device_id: deviceId // Specify the device
-                }
-            );
+            await callSpotifyApi('/me/player/play', 'PUT', session.accessToken, { uris: [`spotify:track:${trackId}`], device_id: deviceId });
         } catch (error: any) {
             console.error("Error playing song:", error);
             let userMessage = "Failed to play song. Please ensure Spotify is open and responsive.";
             if (error.message) {
-                if (error.message.includes("NO_ACTIVE_DEVICE") || error.message.includes("No active device")) {
-                    userMessage = "No active Spotify device. Please start playback in your Spotify app and try again.";
-                } else if (error.message.includes("PREMIUM_REQUIRED") || error.message.includes("premium")) {
-                    userMessage = "Spotify Premium is required for this action.";
-                } else if (error.message.includes("Device not found") || error.message.includes("PLAYER_COMMAND_FAILED")) {
-                    userMessage = "Could not connect to the Spotify player. Please ensure it's active.";
-                } else if (error.message.length < 150) { // Show shorter API errors if somewhat understandable
-                     userMessage = error.message;
-                }
+                if (error.message.includes("NO_ACTIVE_DEVICE")) userMessage = "No active Spotify device. Please start playback in your Spotify app and try again.";
+                else if (error.message.includes("PREMIUM_REQUIRED")) userMessage = "Spotify Premium is required for this action.";
+                else if (error.message.includes("Device not found")) userMessage = "Could not connect to the Spotify player. Please ensure it's active.";
+                else if (error.message.length < 150) userMessage = error.message;
             }
             setPlaybackError(userMessage);
-        } finally {
-            setPlaybackLoading(null);
-        }
+        } finally { setPlaybackLoading(null); }
     }, [session]);
 
-    const handlePlayCountrySongsRandomly = useCallback(async () => {
-        if (!session?.accessToken || !selectedCountryDetails) {
-            setPlaybackError("Authentication or country details missing.");
-            setPlaybackLoading(null);
-            return;
+    // For SINGLE country panel (uses singleCountryDetails)
+    const handlePlaySingleCountryRandomly = useCallback(async () => {
+        if (!session?.accessToken || !singleCountryDetails) {
+            setPlaybackError("Authentication or country details missing."); setPlaybackLoading(null); return;
         }
-        setPlaybackLoading("country-random");
-        setPlaybackError(null);
-        setPlaylistCreationStatus(null);
-
-        const trackUris: string[] = selectedCountryDetails.artists.flatMap(artist => 
-            artist.songs.map(song => `spotify:track:${song.id}`)
-        );
-
+        setPlaybackLoading("country-random"); setPlaybackError(null); setPlaylistCreationStatus(null);
+        const trackUris: string[] = singleCountryDetails.artists.flatMap(artist => artist.songs.map(song => `spotify:track:${song.id}`));
         if (trackUris.length === 0) {
-            setPlaybackError("No songs to play for this country selection.");
-            setPlaybackLoading(null);
-            return;
+            setPlaybackError("No songs to play for this country selection."); setPlaybackLoading(null); return;
         }
-
-        // Shuffle trackUris (existing logic)
-        for (let i = trackUris.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [trackUris[i], trackUris[j]] = [trackUris[j], trackUris[i]];
-        }
-
+        for (let i = trackUris.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [trackUris[i], trackUris[j]] = [trackUris[j], trackUris[i]]; }
         try {
-            const deviceId = await getSpotifyDeviceId(session.accessToken); // Use the helper
+            const deviceId = await getSpotifyDeviceId(session.accessToken);
             if (!deviceId) {
-                setPlaybackError("No active Spotify player found. Please open Spotify and play something, or ensure a device is available.");
-                setPlaybackLoading(null);
-                return;
+                setPlaybackError("No active Spotify player found."); setPlaybackLoading(null); return;
             }
-
-            // Enable shuffle on the selected device
             await callSpotifyApi(`/me/player/shuffle?state=true&device_id=${deviceId}`, 'PUT', session.accessToken);
-            
-            // Play the tracks on the selected device
-            await callSpotifyApi(
-                '/me/player/play', 
-                'PUT', 
-                session.accessToken, 
-                {
-                    uris: trackUris,
-                    device_id: deviceId
-                }
-            );
-        } catch (error: any) {
-            console.error("Error playing country songs randomly:", error);
-            let userMessage = "Failed to play. Ensure Spotify is open, responsive, and you have Premium if required.";
+            await callSpotifyApi('/me/player/play', 'PUT', session.accessToken, { uris: trackUris, device_id: deviceId });
+        } catch (error: any) { /* ... error handling (as provided before, checking error.message) ... */ 
+            let userMessage = "Failed to play. Ensure Spotify is open, responsive, and Premium if required.";
              if (error.message) {
-                if (error.message.includes("NO_ACTIVE_DEVICE") || error.message.includes("No active device")) {
-                    userMessage = "No active Spotify device. Please start playback in your Spotify app and try again.";
-                } else if (error.message.includes("PREMIUM_REQUIRED") || error.message.includes("premium")) {
-                    userMessage = "Spotify Premium may be required for this feature.";
-                } else if (error.message.includes("Device not found") || error.message.includes("PLAYER_COMMAND_FAILED")) {
-                    userMessage = "Could not connect to the Spotify player. Please ensure it's active.";
-                } else if (error.message.includes("too many uris")) { // Example of another specific error
-                    userMessage = "Too many songs to play at once for this selection. Try a smaller selection.";
-                } else if (error.message.length < 150) {
-                     userMessage = error.message;
-                }
+                if (error.message.includes("NO_ACTIVE_DEVICE")) userMessage = "No active Spotify device.";
+                else if (error.message.includes("PREMIUM_REQUIRED")) userMessage = "Spotify Premium may be required.";
+                else if (error.message.length < 150) userMessage = error.message;
             }
             setPlaybackError(userMessage);
-        } finally {
-            setPlaybackLoading(null);
+        } finally { setPlaybackLoading(null); }
+     }, [session, singleCountryDetails, setPlaybackError, setPlaylistCreationStatus, setPlaybackLoading ]);
+
+    const handleSaveSingleCountryPlaylist = useCallback(async () => {
+        if (!session?.accessToken || !singleCountryDetails || !session.user?.id) {
+            setPlaylistCreationStatus("Auth, country details, or user ID missing."); setIsCreatingPlaylist(false); return;
         }
-     }, [session, selectedCountryDetails]);
+        setIsCreatingPlaylist(true); setPlaylistCreationStatus("Creating playlist..."); setPlaybackError(null);
+        const { name: countryName, artists: artistsDetails } = singleCountryDetails;
+        const trackUris: string[] = artistsDetails.flatMap(artist => artist.songs.map(song => `spotify:track:${song.id}`));
+        if (trackUris.length === 0) {
+            setPlaylistCreationStatus("No songs to add."); setIsCreatingPlaylist(false); return;
+        }
+        try {
+            const newPlaylist = await callSpotifyApi(`/users/${session.user.id}/playlists`, 'POST', session.accessToken, { name: `Songs from ${countryName} (SpotiMap)`, public: false, description: `Songs from ${countryName}. Contains ${trackUris.length} songs.` });
+            if (!newPlaylist?.id) throw new Error("Failed to create playlist.");
+            setPlaylistCreationStatus(`Playlist "${newPlaylist.name}" created! Adding songs...`);
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < trackUris.length; i += CHUNK_SIZE) { await callSpotifyApi(`/playlists/${newPlaylist.id}/tracks`, 'POST', session.accessToken, { uris: trackUris.slice(i, i + CHUNK_SIZE) }); }
+            setPlaylistCreationStatus(`Added ${trackUris.length} songs to "${newPlaylist.name}"!`);
+        } catch (error: any) { 
+            let userMessage = "Failed to save playlist.";
+            if (error.message && error.message.length < 150) userMessage = `Error: ${error.message}`;
+            setPlaylistCreationStatus(userMessage);
+        } finally { setIsCreatingPlaylist(false); }
+    }, [session, singleCountryDetails, setIsCreatingPlaylist, setPlaylistCreationStatus, setPlaybackError]);
 
-    const handleSaveCountrySongsToPlaylist = useCallback(async () => {  //
-        if (!session?.accessToken || !selectedCountryDetails || !session.user?.id) { setPlaylistCreationStatus("Auth, country details, or user ID missing."); return; } //
-        setIsCreatingPlaylist(true); setPlaylistCreationStatus("Creating playlist..."); //
-        const { name: countryName, artists: artistsDetails } = selectedCountryDetails; //
-        const trackUris: string[] = artistsDetails.flatMap(artist => artist.songs.map(song => `spotify:track:${song.id}`)); //
-        if (trackUris.length === 0) { setPlaylistCreationStatus("No songs to add."); setIsCreatingPlaylist(false); return; } //
-        try { //
-            const newPlaylist = await callSpotifyApi(`/users/${session.user.id}/playlists`, 'POST', session.accessToken, { name: `Songs from ${countryName} (MapApp)`, public: false, description: `Songs from ${countryName}. Contains ${trackUris.length} songs.` }); //
-            if (!newPlaylist?.id) throw new Error("Failed to create playlist."); //
-            setPlaylistCreationStatus(`Playlist "${newPlaylist.name}" created! Adding songs...`); //
-            const CHUNK_SIZE = 100; //
-            for (let i = 0; i < trackUris.length; i += CHUNK_SIZE) { await callSpotifyApi(`/playlists/${newPlaylist.id}/tracks`, 'POST', session.accessToken, { uris: trackUris.slice(i, i + CHUNK_SIZE) }); } //
-            setPlaylistCreationStatus(`Added ${trackUris.length} songs to "${newPlaylist.name}"!`); //
-        } catch (error: any) { setPlaylistCreationStatus(`Error: ${error.message || "Failed to save playlist."}`); } //
-        finally { setIsCreatingPlaylist(false); } //
-    }, [session, selectedCountryDetails]); //
+    // For MULTI country panel (uses multiCountryDisplayData)
+    const handlePlayMultiCountryRandomly = useCallback(async () => { /* ... (implementation from previous response, uses multiCountryDisplayData) ... */ 
+        if (!session?.accessToken || !multiCountryDisplayData || multiCountryDisplayData.allTrackUris.length === 0) {
+            setPlaybackError(!session?.accessToken ? "Auth missing." : "No songs selected."); setPlaybackLoading(null); return;
+        }
+        setPlaybackLoading("multi-country-random"); setPlaybackError(null); setPlaylistCreationStatus(null);
+        const trackUris = [...multiCountryDisplayData.allTrackUris];
+        for (let i = trackUris.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [trackUris[i], trackUris[j]] = [trackUris[j], trackUris[i]];}
+        try {
+            const deviceId = await getSpotifyDeviceId(session.accessToken);
+            if (!deviceId) { setPlaybackError("No active Spotify player."); setPlaybackLoading(null); return; }
+            await callSpotifyApi(`/me/player/shuffle?state=true&device_id=${deviceId}`, 'PUT', session.accessToken);
+            await callSpotifyApi('/me/player/play', 'PUT', session.accessToken, { uris: trackUris, device_id: deviceId });
+        } catch (error: any) { /* ... error handling ... */ 
+            let userMessage = "Failed to play. Ensure Spotify is open, responsive, and Premium if required.";
+            if (error.message) {
+               if (error.message.includes("NO_ACTIVE_DEVICE")) userMessage = "No active Spotify device.";
+               else if (error.message.includes("PREMIUM_REQUIRED")) userMessage = "Spotify Premium may be required.";
+               else if (error.message.length < 150) userMessage = error.message;
+            }
+            setPlaybackError(userMessage);
+        } finally { setPlaybackLoading(null); }
+    }, [session, multiCountryDisplayData, setPlaybackError, setPlaylistCreationStatus, setPlaybackLoading]);
+
+    const handleSaveMultiCountryPlaylist = useCallback(async () => { /* ... (implementation from previous response, uses multiCountryDisplayData) ... */ 
+        if (!session?.accessToken || !session.user?.id || !multiCountryDisplayData || multiCountryDisplayData.allTrackUris.length === 0) {
+            setPlaylistCreationStatus("Auth, user ID, or song selection missing."); setIsCreatingPlaylist(false); return;
+        }
+        setIsCreatingPlaylist(true); setPlaylistCreationStatus("Creating playlist..."); setPlaybackError(null);
+        let playlistName = "SpotiMap Multi-Country Mix"; /* ... (name generation logic from prev response) ... */
+        if (multiCountryDisplayData.countries.length > 0) {
+            if (multiCountryDisplayData.countries.length <= 3) playlistName = `Songs from ${multiCountryDisplayData.countries.map(c => c.name).join(', ')} (SpotiMap)`;
+            else playlistName = `Songs from ${multiCountryDisplayData.countries.length} countries (SpotiMap)`;
+        }
+        if (playlistName.length > 100) playlistName = playlistName.substring(0, 97) + "...";
+        const trackUrisToSave = multiCountryDisplayData.allTrackUris;
+        try {
+            const newPlaylist = await callSpotifyApi(`/users/${session.user.id}/playlists`, 'POST', session.accessToken, { name: playlistName, public: false, description: `Songs from SpotiMap selection. ${trackUrisToSave.length} songs.` });
+            if (!newPlaylist?.id) throw new Error("Failed to create playlist ID.");
+            setPlaylistCreationStatus(`Playlist "${newPlaylist.name}" created! Adding songs...`);
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < trackUrisToSave.length; i += CHUNK_SIZE) { await callSpotifyApi(`/playlists/${newPlaylist.id}/tracks`, 'POST', session.accessToken, { uris: trackUrisToSave.slice(i, i + CHUNK_SIZE) }); }
+            setPlaylistCreationStatus(`Added ${trackUrisToSave.length} songs to "${newPlaylist.name}"!`);
+        } catch (error: any) { /* ... error handling ... */ 
+            let userMessage = "Failed to save playlist.";
+            if (error.message && error.message.length < 150) userMessage = `Error: ${error.message}`;
+            setPlaylistCreationStatus(userMessage);
+        } finally { setIsCreatingPlaylist(false); }
+    }, [session, multiCountryDisplayData, setIsCreatingPlaylist, setPlaylistCreationStatus, setPlaybackError]);
 
 
-    // --- RENDER LOGIC ---
-    if (authStatus === "loading" && !session && !loaderMessage) { //
-        return <div className="flex min-h-screen items-center justify-center text-lg text-nb-text/70">Authenticating...</div>; //
+    if (authStatus === "loading" && !session && !loaderMessage) {
+        return <div className="flex min-h-screen items-center justify-center text-lg text-nb-text/70">Authenticating...</div>;
     }
-    
-    if (!session) { //
-        return <LoginScreen onSignIn={() => signIn("spotify")} />; //
+    if (!session) {
+        return <LoginScreen onSignIn={() => signIn("spotify")} />;
     }
 
     return (
-        <div className="flex min-h-screen flex-col bg-nb-bg text-nb-text"> {/* */}
+        <div className="flex min-h-screen flex-col bg-nb-bg text-nb-text">
             {loaderMessage && <StatusLoader message={loaderMessage} />}
             
             <TopMenu
-                isLoggedIn={!!session} //
-                userName={session.user?.name} //
-                onSignOut={() => signOut()} //
-                onSignIn={() => signIn("spotify")} //
-                currentSourceLabel={currentSourceLabel} //
-                onFetchLikedSongs={handleFetchLikedSongs} //
-                playlists={playlists} //
-                selectedPlaylistId={selectedPlaylistId} //
-                onPlaylistChange={handlePlaylistChange} //
-                isLoadingData={isLoadingAnythingNonAuth} //
-                isLoadingPlaylists={isLoadingPlaylists} //
-                unknownsCount={unknownsCount} //
-                onUnknownsClick={handleUnknownsClick} //
+                isLoggedIn={!!session}
+                userName={session.user?.name}
+                onSignOut={() => signOut()}
+                onSignIn={() => signIn("spotify")}
+                currentSourceLabel={currentSourceLabel}
+                onFetchLikedSongs={handleFetchLikedSongs}
+                playlists={playlists}
+                selectedPlaylistId={selectedPlaylistId}
+                onPlaylistChange={handlePlaylistChange}
+                isLoadingData={isLoadingAnythingNonAuth}
+                isLoadingPlaylists={isLoadingPlaylists}
+                unknownsCount={unknownsCount}
+                onUnknownsClick={() => setIsUnknownsWindowOpen(prev => !prev)}
             />
 
-            <main className="flex flex-grow pt-[55px]"> {/* */}
-                <div className="relative flex-grow"> {/* */}
-                     {(currentTracks.length > 0 || isLoadingLikedSongs || isLoadingPlaylistTracks || (isLoadingPlaylists && playlists.length ===0 && loaderMessage) ) ? ( //
+            <main className="flex flex-grow pt-[55px]">
+                <div className="relative flex-grow">
+                    {multiSelectedCountries.length > 0 && !isMultiCountryPanelOpen && !isSingleCountryPanelOpen && (
+                        <button
+                            onClick={handleShowMultiCountryDetails}
+                            className="btn btn-accent fixed top-[70px] right-nb-md z-[550] px-nb-md py-nb-sm shadow-nb-accent"
+                        >
+                            Details for {multiSelectedCountries.length} Countries
+                        </button>
+                    )}
+                    {(currentTracks.length > 0 || isLoadingLikedSongs || isLoadingPlaylistTracks || (isLoadingPlaylists && playlists.length ===0 && loaderMessage) ) ? (
                         <>
                             <MapComponent
-                                countrySongCounts={countrySongCounts} //
-                                onCountryClick={handleCountryClick} //
+                                countrySongCounts={countrySongCounts}
+                                onCountryClick={handleMapClick}
+                                selectedIsoCodes={codesToHighlightOnMap} // Correctly passed
                             />
-                            {legendItems.length > 0 && <MapLegend legendItems={legendItems} />} {/* */}
+                            {legendItems.length > 0 && <MapLegend legendItems={legendItems} />}
                         </>
                     ) : (
-                         !loaderMessage && ( //
-                            <div className="flex h-full w-full items-center justify-center border-nb-thick border-dashed border-nb-border/50 p-nb-lg text-center text-nb-text/70"> {/* */}
-                                <p>Select &quot;Liked Songs&quot; or a playlist from the top menu to begin exploring your music map!</p> {/* */}
+                         !loaderMessage && (
+                            <div className="flex h-full w-full items-center justify-center border-nb-thick border-dashed border-nb-border/50 p-nb-lg text-center text-nb-text/70">
+                                <p>Select &quot;Liked Songs&quot; or a playlist from the top menu to begin exploring your music map!</p>
                             </div>
                          )
                     )}
-
                     <UnknownsPanel
-                        isOpen={isUnknownsWindowOpen} //
-                        onClose={() => setIsUnknownsWindowOpen(false)} //
-                        unknownsList={unknownsList} //
+                        isOpen={isUnknownsWindowOpen}
+                        onClose={() => setIsUnknownsWindowOpen(false)}
+                        unknownsList={unknownsList}
                     />
                 </div>
             </main>
 
             <CountryDetailsPanel
-                isOpen={isCountryPanelOpen} //
-                onClose={closeCountryPanel} //
-                details={selectedCountryDetails} //
-                onPlaySong={handlePlaySong} //
-                onPlayCountryRandomly={handlePlayCountrySongsRandomly} //
-                onSavePlaylist={handleSaveCountrySongsToPlaylist} //
-                playbackLoading={playbackLoading} //
-                playbackError={playbackError} //
-                isCreatingPlaylist={isCreatingPlaylist} //
-                playlistCreationStatus={playlistCreationStatus} //
+                isOpen={isSingleCountryPanelOpen || isMultiCountryPanelOpen}
+                onClose={closeAnyPanelAndResets}
+                details={isMultiCountryPanelOpen ? multiCountryDisplayData : singleCountryDetails}
+                onPlaySong={handlePlaySong}
+                onPlayCountryRandomly={
+                    isMultiCountryPanelOpen && multiCountryDisplayData 
+                    ? handlePlayMultiCountryRandomly 
+                    : handlePlaySingleCountryRandomly // Use specific single-country handler
+                }
+                onSavePlaylist={
+                    isMultiCountryPanelOpen && multiCountryDisplayData
+                    ? handleSaveMultiCountryPlaylist
+                    : handleSaveSingleCountryPlaylist // Use specific single-country handler
+                }
+                playbackLoading={playbackLoading}
+                playbackError={playbackError}
+                isCreatingPlaylist={isCreatingPlaylist}
+                playlistCreationStatus={playlistCreationStatus}
             />
             <Analytics />
             <SpeedInsights />

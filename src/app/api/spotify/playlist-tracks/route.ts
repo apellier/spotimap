@@ -27,6 +27,7 @@ interface SpotifyAlbum {
 interface SpotifyTrack {
     id: string;
     name: string;
+    uri: string;
     artists: SpotifyArtist[];
     album: SpotifyAlbum;
     external_urls: { spotify: string };
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
     let allPlaylistTracks: SpotifyPlaylistTrackItem[] = [];
     // Max limit for playlist tracks is 100 per request
     // We can also specify which fields to return using the `fields` parameter to optimize
-    let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50&fields=items(added_at,added_by,is_local,track(id,name,artists(id,name),album(id,name,images),external_urls,preview_url)),next,total`;
+    let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50&fields=items(added_at,added_by,is_local,track(id,name,uri,artists(id,name),album(id,name,images),external_urls,preview_url)),next,total`;
 
 
     try {
