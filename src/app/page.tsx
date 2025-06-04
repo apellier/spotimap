@@ -84,6 +84,22 @@ export default function HomePage() {
 
     const isLoadingAnythingNonAuth = isLoadingLikedSongs || isLoadingPlaylists || isLoadingPlaylistTracks || isLoadingArtistCountries || isAggregating; //
 
+    async function getSpotifyDeviceId(accessToken: string): Promise<string | null> {
+        if (!accessToken) return null;
+        try {
+            const devicesData = await callSpotifyApi('/me/player/devices', 'GET', accessToken); //
+            if (devicesData?.devices?.length > 0) {
+                const activeDevice = devicesData.devices.find((d: any) => d.is_active === true);
+                if (activeDevice?.id) return activeDevice.id;
+                // If no active device, return the first available one
+                if (devicesData.devices[0]?.id) return devicesData.devices[0].id; 
+            }
+            return null;
+        } catch (error) {
+            console.warn("Could not fetch Spotify devices:", error instanceof Error ? error.message : error);
+            return null;
+        }
+    }
 
     // Update total unique artists when currentTracks change and are about to be processed for origins
     useEffect(() => {
@@ -283,33 +299,119 @@ export default function HomePage() {
     }, [isCountryPanelOpen, isUnknownsWindowOpen, closeCountryPanel, closeUnknownsPanel]);
 
 
-    const handlePlaySong = useCallback(async (trackId: string) => {  //
-        if (!session?.accessToken || !trackId) { setPlaybackError("Authentication or Track ID missing."); return; } //
-        setPlaybackLoading(trackId); setPlaybackError(null); //
-        try { await callSpotifyApi('/me/player/play', 'PUT', session.accessToken, { uris: [`spotify:track:${trackId}`] }); } //
-        catch (error: any) { setPlaybackError(error.message || "Failed to play song."); } //
-        finally { setPlaybackLoading(null); } //
-    }, [session]); //
+    const handlePlaySong = useCallback(async (trackId: string) => {
+        if (!session?.accessToken || !trackId) {
+            setPlaybackError("Authentication or Track ID missing.");
+            return;
+        }
+        setPlaybackLoading(trackId);
+        setPlaybackError(null);
 
-    const handlePlayCountrySongsRandomly = useCallback(async () => {  //
-        if (!session?.accessToken || !selectedCountryDetails) { setPlaybackError("Auth or country details missing."); setPlaybackLoading(null); return; } //
-        setPlaybackLoading("country-random"); setPlaybackError(null); setPlaylistCreationStatus(null); //
-        const trackUris: string[] = selectedCountryDetails.artists.flatMap(artist => artist.songs.map(song => `spotify:track:${song.id}`)); //
-        if (trackUris.length === 0) { setPlaybackError("No songs to play."); setPlaybackLoading(null); return; } //
-        for (let i = trackUris.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [trackUris[i], trackUris[j]] = [trackUris[j], trackUris[i]]; } //
-        try { //
-            let deviceId: string | undefined = undefined; //
-            try { //
-                const devicesData = await callSpotifyApi('/me/player/devices', 'GET', session.accessToken); //
-                if (devicesData?.devices?.length > 0) { const activeDevice = devicesData.devices.find((d: any) => d.is_active === true); deviceId = activeDevice?.id || devicesData.devices[0]?.id; } //
-            } catch (deviceError: any) { console.warn("Could not fetch Spotify devices:", deviceError.message); } //
-            let shuffleUrl = `/me/player/shuffle?state=true`; if (deviceId) shuffleUrl += `&device_id=${deviceId}`; //
-            await callSpotifyApi(shuffleUrl, 'PUT', session.accessToken); //
-            const playBody: { uris: string[]; device_id?: string } = { uris: trackUris }; if (deviceId) playBody.device_id = deviceId; //
-            await callSpotifyApi('/me/player/play', 'PUT', session.accessToken, playBody); //
-        } catch (error: any) { console.error("Error playing country songs randomly:", error); setPlaybackError(error.message || "Failed to play. Ensure Spotify is open & Premium."); } //
-        finally { setPlaybackLoading(null); } //
-     }, [session, selectedCountryDetails]); //
+        try {
+            const deviceId = await getSpotifyDeviceId(session.accessToken);
+            if (!deviceId) {
+                setPlaybackError("No active Spotify player found. Please open Spotify and play something, or ensure a device is available.");
+                setPlaybackLoading(null);
+                return;
+            }
+
+            await callSpotifyApi(
+                '/me/player/play', 
+                'PUT', 
+                session.accessToken, 
+                { 
+                    uris: [`spotify:track:${trackId}`],
+                    device_id: deviceId // Specify the device
+                }
+            );
+        } catch (error: any) {
+            console.error("Error playing song:", error);
+            let userMessage = "Failed to play song. Please ensure Spotify is open and responsive.";
+            if (error.message) {
+                if (error.message.includes("NO_ACTIVE_DEVICE") || error.message.includes("No active device")) {
+                    userMessage = "No active Spotify device. Please start playback in your Spotify app and try again.";
+                } else if (error.message.includes("PREMIUM_REQUIRED") || error.message.includes("premium")) {
+                    userMessage = "Spotify Premium is required for this action.";
+                } else if (error.message.includes("Device not found") || error.message.includes("PLAYER_COMMAND_FAILED")) {
+                    userMessage = "Could not connect to the Spotify player. Please ensure it's active.";
+                } else if (error.message.length < 150) { // Show shorter API errors if somewhat understandable
+                     userMessage = error.message;
+                }
+            }
+            setPlaybackError(userMessage);
+        } finally {
+            setPlaybackLoading(null);
+        }
+    }, [session]);
+
+    const handlePlayCountrySongsRandomly = useCallback(async () => {
+        if (!session?.accessToken || !selectedCountryDetails) {
+            setPlaybackError("Authentication or country details missing.");
+            setPlaybackLoading(null);
+            return;
+        }
+        setPlaybackLoading("country-random");
+        setPlaybackError(null);
+        setPlaylistCreationStatus(null);
+
+        const trackUris: string[] = selectedCountryDetails.artists.flatMap(artist => 
+            artist.songs.map(song => `spotify:track:${song.id}`)
+        );
+
+        if (trackUris.length === 0) {
+            setPlaybackError("No songs to play for this country selection.");
+            setPlaybackLoading(null);
+            return;
+        }
+
+        // Shuffle trackUris (existing logic)
+        for (let i = trackUris.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [trackUris[i], trackUris[j]] = [trackUris[j], trackUris[i]];
+        }
+
+        try {
+            const deviceId = await getSpotifyDeviceId(session.accessToken); // Use the helper
+            if (!deviceId) {
+                setPlaybackError("No active Spotify player found. Please open Spotify and play something, or ensure a device is available.");
+                setPlaybackLoading(null);
+                return;
+            }
+
+            // Enable shuffle on the selected device
+            await callSpotifyApi(`/me/player/shuffle?state=true&device_id=${deviceId}`, 'PUT', session.accessToken);
+            
+            // Play the tracks on the selected device
+            await callSpotifyApi(
+                '/me/player/play', 
+                'PUT', 
+                session.accessToken, 
+                {
+                    uris: trackUris,
+                    device_id: deviceId
+                }
+            );
+        } catch (error: any) {
+            console.error("Error playing country songs randomly:", error);
+            let userMessage = "Failed to play. Ensure Spotify is open, responsive, and you have Premium if required.";
+             if (error.message) {
+                if (error.message.includes("NO_ACTIVE_DEVICE") || error.message.includes("No active device")) {
+                    userMessage = "No active Spotify device. Please start playback in your Spotify app and try again.";
+                } else if (error.message.includes("PREMIUM_REQUIRED") || error.message.includes("premium")) {
+                    userMessage = "Spotify Premium may be required for this feature.";
+                } else if (error.message.includes("Device not found") || error.message.includes("PLAYER_COMMAND_FAILED")) {
+                    userMessage = "Could not connect to the Spotify player. Please ensure it's active.";
+                } else if (error.message.includes("too many uris")) { // Example of another specific error
+                    userMessage = "Too many songs to play at once for this selection. Try a smaller selection.";
+                } else if (error.message.length < 150) {
+                     userMessage = error.message;
+                }
+            }
+            setPlaybackError(userMessage);
+        } finally {
+            setPlaybackLoading(null);
+        }
+     }, [session, selectedCountryDetails]);
 
     const handleSaveCountrySongsToPlaylist = useCallback(async () => {  //
         if (!session?.accessToken || !selectedCountryDetails || !session.user?.id) { setPlaylistCreationStatus("Auth, country details, or user ID missing."); return; } //
