@@ -124,9 +124,12 @@ export default function HomePage() {
         setPlaybackError(null);
         setPlaylistCreationStatus(null);
     }, []); // State setters are stable, empty array is fine.
+
+    const [isMultiSelectModeActive, setIsMultiSelectModeActive] = useState(false);
+
     
     const handleMapClick = useCallback((isoCode: string, countryName: string, isShiftKey: boolean) => {
-        if (isShiftKey) {
+        if (isMultiSelectModeActive || isShiftKey) {
             setMultiSelectedCountries(prevSelected => {
                 const existingIndex = prevSelected.findIndex(c => c.isoCode === isoCode);
                 if (existingIndex > -1) {
@@ -172,7 +175,7 @@ export default function HomePage() {
             setPlaybackError(null);
             setPlaylistCreationStatus(null);
         }
-    }, [countrySongCounts, currentTracks, artistCountries, isSingleCountryPanelOpen]);
+    }, [isMultiSelectModeActive, isSingleCountryPanelOpen, countrySongCounts, currentTracks, artistCountries]);
     
     const handleShowMultiCountryDetails = useCallback(() => {
         if (multiSelectedCountries.length > 0) {
@@ -488,14 +491,34 @@ export default function HomePage() {
 
             <main className="flex flex-grow pt-[55px]">
                 <div className="relative flex-grow">
-                    {multiSelectedCountries.length > 0 && !isMultiCountryPanelOpen && !isSingleCountryPanelOpen && (
-                        <button
-                            onClick={handleShowMultiCountryDetails}
-                            className="btn btn-accent fixed top-[70px] right-nb-md z-[550] px-nb-md py-nb-sm shadow-nb-accent"
-                        >
-                            Details for {multiSelectedCountries.length} Countries
-                        </button>
-                    )}
+                    
+                <div className="absolute top-[70px] right-nb-md z-[550] flex flex-col space-y-2 items-end" 
+     style={{ marginTop: '10px' }} // Adjust positioning as needed
+>
+    <button
+        onClick={() => {
+            setIsMultiSelectModeActive(prev => !prev);
+            // Optional: When exiting multi-select mode, you might want to clear the selection
+            // if (!isMultiSelectModeActive) { // If it was true and is now becoming false
+            // setMultiSelectedCountries([]);
+            // }
+        }}
+        className={`btn px-nb-sm py-1 text-xs ${isMultiSelectModeActive ? 'btn-accent' : 'btn-outline'}`}
+    >
+        {isMultiSelectModeActive ? 'Cancel Multi-Select' : 'Select Multiple Countries'}
+    </button>
+
+    {multiSelectedCountries.length > 0 && !isMultiCountryPanelOpen && !isSingleCountryPanelOpen && (
+        <button
+            onClick={handleShowMultiCountryDetails}
+            className="btn btn-accent px-nb-md py-nb-sm"
+        >
+            Details for {multiSelectedCountries.length} Countries
+        </button>
+    )}
+</div>
+                    
+                    
                     {(currentTracks.length > 0 || isLoadingLikedSongs || isLoadingPlaylistTracks || (isLoadingPlaylists && playlists.length ===0 && loaderMessage) ) ? (
                         <>
                             <MapComponent
