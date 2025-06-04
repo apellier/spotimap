@@ -253,7 +253,35 @@ export default function HomePage() {
     }, [countrySongCounts, currentTracks, artistCountries]); //
 
     const handleUnknownsClick = () => setIsUnknownsWindowOpen(prev => !prev); //
-    const closeCountryPanel = () => { setIsCountryPanelOpen(false); setPlaybackError(null); setPlaylistCreationStatus(null); }; //
+    const closeCountryPanel = useCallback(() => { // Ensure closeCountryPanel is memoized if it's a dependency elsewhere
+        setIsCountryPanelOpen(false); 
+        setPlaybackError(null); 
+        setPlaylistCreationStatus(null);
+    }, []);
+    const closeUnknownsPanel = useCallback(() => {
+        setIsUnknownsWindowOpen(false);
+    }, []);
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                if (isCountryPanelOpen) {
+                    closeCountryPanel();
+                } else if (isUnknownsWindowOpen) {
+                    // Assuming UnknownsPanel is closed by directly setting its state
+                    closeUnknownsPanel();
+                }
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+
+        // Cleanup function to remove the event listener when the component unmounts
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isCountryPanelOpen, isUnknownsWindowOpen, closeCountryPanel, closeUnknownsPanel]);
+
 
     const handlePlaySong = useCallback(async (trackId: string) => {  //
         if (!session?.accessToken || !trackId) { setPlaybackError("Authentication or Track ID missing."); return; } //
