@@ -14,11 +14,12 @@ import Feature, { FeatureLike } from 'ol/Feature';
 import { Geometry } from 'ol/geom';
 import { Fill, Stroke, Style } from 'ol/style';
 import { getCountryColor } from '@/utils/mapUtils';
-import { MapBrowserEvent } from 'ol'; // Default import
+import { MapBrowserEvent } from 'ol';
 
 interface MapComponentProps {
     countrySongCounts: Map<string, number>;
-    onCountryClick: (isoCode: string, countryName: string) => void;
+    onCountryClick: (isoCode: string, countryName: string, isShiftKey: boolean) => void;
+    selectedIsoCodes: string[];
 }
 
 interface TooltipInfo {
@@ -28,22 +29,19 @@ interface TooltipInfo {
     y: number;
 }
 
-const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountryClick }) => {
+const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountryClick, selectedIsoCodes }) => {
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<OlMap | null>(null);
     const vectorLayerRef = useRef<VectorLayer<VectorSource<Feature<Geometry>>> | null>(null);
-    const [maxSongCount, setMaxSongCount] = useState(1);
     const [tooltip, setTooltip] = useState<TooltipInfo>({ visible: false, content: '', x: 0, y: 0 });
 
+    // Store the onCountryClick callback in a ref to keep it stable for the map event listener
+    const onCountryClickRef = useRef(onCountryClick);
     useEffect(() => {
-        if (countrySongCounts.size > 0) {
-            const counts = Array.from(countrySongCounts.values());
-            setMaxSongCount(Math.max(...counts, 1));
-        } else {
-            setMaxSongCount(1);
-        }
-    }, [countrySongCounts]);
+        onCountryClickRef.current = onCountryClick;
+    }, [onCountryClick]);
 
+    // Effect for initializing the map (should only run once)
     useEffect(() => {
         if (!mapElement.current || mapRef.current) {
             return;
@@ -64,20 +62,16 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
         mapRef.current = initialMap;
 
         fetch('/countries.geojson')
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status} fetching GeoJSON`);
-                return response.json();
-            })
+            .then(response => response.ok ? response.json() : Promise.reject(`HTTP error! status: ${response.status}`))
             .then(data => {
                 const geoJsonFormat = new GeoJSON();
-                const features = geoJsonFormat.readFeatures(data, {
-                    featureProjection: 'EPSG:3857'
-                }) as Feature<Geometry>[];
+                const features = geoJsonFormat.readFeatures(data, { featureProjection: 'EPSG:3857' }) as Feature<Geometry>[];
                 initialVectorSource.addFeatures(features);
             })
             .catch(error => console.error("Error loading GeoJSON data:", error));
 
-        initialMap.on('pointermove', (evt: MapBrowserEvent<any>) => { // Using <any> for the event type
+        initialMap.on('pointermove', (evt: MapBrowserEvent<any>) => {
+            // ... (tooltip logic remains the same)
             if (evt.dragging || !mapRef.current) {
                 setTooltip(prev => ({ ...prev, visible: false }));
                 if (mapElement.current) mapElement.current.style.cursor = '';
@@ -90,30 +84,17 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 const typedFeature = featureAtPixel as Feature<Geometry>;
                 const countryName = typedFeature.get('name') || 'Unknown Country';
                 const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
-                const songCount = isoCode ? (countrySongCounts.get(isoCode) || 0) : 0;
+                const songCount = isoCode ? (countrySongCounts.get(isoCode) || 0) : 0; // countrySongCounts from props
 
-                let xCoord = 0;
-                let yCoord = 0;
-                const originalEvent = evt.originalEvent; // originalEvent is 'any' here
-                if (originalEvent instanceof PointerEvent) {
-                    xCoord = originalEvent.pageX;
-                    yCoord = originalEvent.pageY;
-                } else if (originalEvent instanceof MouseEvent) { // Fallback for older systems
-                    xCoord = originalEvent.pageX;
-                    yCoord = originalEvent.pageY;
-                } else if (originalEvent instanceof TouchEvent && originalEvent.changedTouches?.length > 0) {
-                    xCoord = originalEvent.changedTouches[0].pageX;
-                    yCoord = originalEvent.changedTouches[0].pageY;
-                }
-
-                setTooltip({
-                    visible: true,
-                    content: `${countryName}: ${songCount} song${songCount === 1 ? '' : 's'}`,
-                    x: xCoord,
-                    y: yCoord,
-                });
+                let xCoord = 0, yCoord = 0;
+                const originalEvent = evt.originalEvent;
+                if (originalEvent instanceof PointerEvent) { xCoord = originalEvent.pageX; yCoord = originalEvent.pageY; }
+                else if (originalEvent instanceof MouseEvent) { xCoord = originalEvent.pageX; yCoord = originalEvent.pageY; }
+                else if (originalEvent instanceof TouchEvent && originalEvent.changedTouches?.length > 0) { xCoord = originalEvent.changedTouches[0].pageX; yCoord = originalEvent.changedTouches[0].pageY;}
+                
+                setTooltip({ visible: true, content: `${countryName}: ${songCount} song${songCount === 1 ? '' : 's'}`, x: xCoord, y: yCoord });
                 if (mapElement.current) mapElement.current.style.cursor = 'pointer';
-                return true; 
+                return true;
             });
             if (!featureFound) {
                 setTooltip(prev => ({ ...prev, visible: false }));
@@ -121,7 +102,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             }
         });
 
-        initialMap.on('click', (evt: MapBrowserEvent<any>) => { // Using <any> for the event type
+        initialMap.on('click', (evt: MapBrowserEvent<any>) => {
             if (!mapRef.current) return;
             const pixel = mapRef.current.getEventPixel(evt.originalEvent);
             mapRef.current.forEachFeatureAtPixel(pixel, (featureAtPixel) => {
@@ -129,9 +110,10 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
                 const countryName = typedFeature.get('name') || 'Unknown';
                 if (isoCode) {
-                    onCountryClick(isoCode, countryName);
+                    const isShiftKey = evt.originalEvent.shiftKey;
+                    onCountryClickRef.current(isoCode, countryName, isShiftKey); // Use the ref
                 }
-                return true; 
+                return true;
             });
         });
         
@@ -140,7 +122,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             setTooltip(prev => ({ ...prev, visible: false }));
             if (mapElement.current) mapElement.current.style.cursor = '';
         };
-        if (mapTargetElement instanceof HTMLElement) { // Ensure it's an HTMLElement
+        if (mapTargetElement instanceof HTMLElement) {
             mapTargetElement.addEventListener('pointerleave', pointerLeaveListener);
         }
 
@@ -150,33 +132,40 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             }
             if (mapRef.current) {
                 mapRef.current.setTarget(undefined);
-                // mapRef.current.dispose(); // Consider if .dispose() is needed for full cleanup
+                mapRef.current.dispose(); // It's good practice to dispose the map
                 mapRef.current = null;
             }
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // EMPTY dependency array: map initializes only once
 
-    }, [countrySongCounts, onCountryClick]); 
-
+    // Effect to update country styles (this is for visual changes, not full map re-init)
     useEffect(() => {
-        if (!vectorLayerRef.current || !countrySongCounts || maxSongCount <= 0) {
+        if (!vectorLayerRef.current || !countrySongCounts) {
             return;
         }
+        // console.log("Updating map styles due to selectedIsoCodes or countrySongCounts change:", selectedIsoCodes);
         const countriesLayer = vectorLayerRef.current;
-        const currentMaxSongCount = maxSongCount;
+        const currentMaxSongCount = Math.max(...Array.from(countrySongCounts.values()), 1);
 
         const countryStyleFunction = (feature: FeatureLike): Style => {
             const typedFeature = feature as Feature<Geometry>;
             const featureIsoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
             const songCount = featureIsoCode ? (countrySongCounts.get(featureIsoCode) || 0) : 0;
+            const isSelected = featureIsoCode ? selectedIsoCodes.includes(featureIsoCode) : false;
 
             return new Style({
                 fill: new Fill({ color: getCountryColor(songCount, currentMaxSongCount) }),
-                stroke: new Stroke({ color: '#BBBBBB', width: 1 }),
+                stroke: new Stroke({ 
+                    color: isSelected ? '#FF8E72' : '#BBBBBB', // Your chosen highlight color
+                    width: isSelected ? 2.5 : 1 
+                }),
+                zIndex: isSelected ? 1 : 0
             });
         };
         countriesLayer.setStyle(countryStyleFunction);
-    }, [countrySongCounts, maxSongCount]);
-
+        countriesLayer.changed();
+    }, [countrySongCounts, selectedIsoCodes]); // This effect handles style updates
 
     return (
         <div className="relative h-full w-full border-nb border-nb-border bg-nb-bg/5 shadow-nb">
@@ -184,11 +173,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             {tooltip.visible && (
                 <div
                     className="pointer-events-none fixed z-[1000] whitespace-nowrap rounded-nb border-nb border-nb-accent bg-nb-bg px-nb-md py-nb-sm text-sm text-nb-text shadow-nb-accent"
-                    style={{
-                        top: `${tooltip.y}px`,      
-                        left: `${tooltip.x + 15}px`, 
-                        transform: 'translateY(-100%)', 
-                    }}
+                    style={{ top: `${tooltip.y}px`, left: `${tooltip.x + 15}px`, transform: 'translateY(-100%)' }}
                 >
                     {tooltip.content}
                 </div>

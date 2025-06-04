@@ -114,3 +114,22 @@ export interface Artist {
   export interface SpotifyDevicesResponse {
       devices: SpotifyDevice[];
   }
+
+  export interface SelectedCountryInfo { // For the single Country Details Panel
+    isoCode: string;
+    name: string;
+    songCount: number;
+    artists: ArtistDetail[];
+  }
+  
+  export interface SelectedCountryBasicInfo { // For tracking multi-selected countries
+    isoCode: string;
+    name: string;
+  }
+  
+  export interface MultiCountryDisplayInfo { // For displaying aggregated multi-country data
+    countries: Array<SelectedCountryBasicInfo & { songCount: number }>;
+    totalSongCount: number;
+    artists: ArtistDetail[];
+    allTrackUris: string[];
+  }
