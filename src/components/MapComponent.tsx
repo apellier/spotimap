@@ -41,6 +41,11 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
         onCountryClickRef.current = onCountryClick;
     }, [onCountryClick]);
 
+    const countrySongCountsRef = useRef(countrySongCounts);
+    useEffect(() => {
+        countrySongCountsRef.current = countrySongCounts;
+    }, [countrySongCounts]);
+
     // Effect for initializing the map (should only run once)
     useEffect(() => {
         if (!mapElement.current || mapRef.current) {
@@ -84,7 +89,8 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 const typedFeature = featureAtPixel as Feature<Geometry>;
                 const countryName = typedFeature.get('name') || 'Unknown Country';
                 const isoCode = typedFeature.get('ISO3166-1-Alpha-2')?.toUpperCase();
-                const songCount = isoCode ? (countrySongCounts.get(isoCode) || 0) : 0; // countrySongCounts from props
+                const currentCounts = countrySongCountsRef.current;
+                const songCount = isoCode ? (currentCounts.get(isoCode) || 0) : 0; // UPDATED LINE
 
                 let xCoord = 0, yCoord = 0;
                 const originalEvent = evt.originalEvent;
