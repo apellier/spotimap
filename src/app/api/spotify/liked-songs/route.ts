@@ -10,6 +10,9 @@ interface SpotifySavedTracksResponse {
     total: number;
 }
 
+// Helper function to introduce a delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session || !session.accessToken) {
@@ -36,17 +39,21 @@ export async function GET() {
                 fetchFunctions.push(() => fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } }));
             }
 
-            // --- BATCHING LOGIC ---
-            const batchSize = 10; // Process 10 requests at a time to avoid rate limiting
+            // --- THROTTLED BATCHING LOGIC ---
+            const batchSize = 10; // Process 10 requests at a time
+            const delayBetweenBatches = 100; // ms to wait between each batch
+
             for (let i = 0; i < fetchFunctions.length; i += batchSize) {
-                const batchPromises = fetchFunctions.slice(i, i + batchSize).map(func => func());
+                const batch = fetchFunctions.slice(i, i + batchSize);
+                const batchPromises = batch.map(func => func());
+                
                 const responses = await Promise.all(batchPromises);
 
                 const additionalPages = await Promise.all(
                     responses.map(res => {
                         if (!res.ok) {
                             console.error(`Spotify API Error (Liked Songs - Batch): Status ${res.status}`);
-                            return null; // Gracefully handle failed requests in a batch
+                            return null; // Gracefully handle failed requests, don't stop the whole process
                         }
                         return res.json() as Promise<SpotifySavedTracksResponse>;
                     })
@@ -55,6 +62,11 @@ export async function GET() {
                 additionalPages.forEach(page => {
                     if (page?.items) allTracks = allTracks.concat(page.items);
                 });
+                
+                // Wait before processing the next batch to avoid hitting rate limits
+                if (i + batchSize < fetchFunctions.length) {
+                    await delay(delayBetweenBatches);
+                }
             }
         }
 

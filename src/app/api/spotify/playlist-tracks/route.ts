@@ -10,6 +10,9 @@ interface SpotifyPlaylistTracksResponse {
     total: number;
 }
 
+// Helper function to introduce a delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session || !session.accessToken) {
@@ -43,8 +46,12 @@ export async function GET(request: NextRequest) {
             }
             
             const batchSize = 10;
+            const delayBetweenBatches = 100; // ms
+
             for (let i = 0; i < fetchFunctions.length; i += batchSize) {
-                const batchPromises = fetchFunctions.slice(i, i + batchSize).map(func => func());
+                const batch = fetchFunctions.slice(i, i + batchSize);
+                const batchPromises = batch.map(func => func());
+                
                 const responses = await Promise.all(batchPromises);
 
                 const additionalPages = await Promise.all(
@@ -57,6 +64,10 @@ export async function GET(request: NextRequest) {
                         allPlaylistTracks = allPlaylistTracks.concat(validItems);
                     }
                 });
+
+                if (i + batchSize < fetchFunctions.length) {
+                    await delay(delayBetweenBatches);
+                }
             }
         }
         
