@@ -25,7 +25,7 @@ import {
     SelectedCountryInfo,
     LikedSongItem,
     PlaylistTrackItem,
-    Track, 
+    SpotifyTrack, 
     LegendItem, 
     ArtistDetail, 
     SelectedCountryBasicInfo, // For multi-select state
@@ -41,7 +41,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 // Helper function to get unique artists
-const getUniqueFirstArtistsFromTracks = (tracks: Array<{ track: Track }>): string[] => {
+const getUniqueFirstArtistsFromTracks = (tracks: Array<{ track: SpotifyTrack }>): string[] => {
     const firstArtists = new Set<string>();
     tracks.forEach(item => {
         if (item.track?.artists && item.track.artists.length > 0) {
@@ -82,8 +82,12 @@ export default function HomePage() {
     const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>("");
     const [currentSourceLabel, setCurrentSourceLabel] = useState<string>("Select Source");
 
-    const currentTracks: Array<LikedSongItem | PlaylistTrackItem> = selectedPlaylistId ? playlistTracks : likedSongs;
+    const rawTracks: Array<LikedSongItem | PlaylistTrackItem> = selectedPlaylistId ? playlistTracks : likedSongs;
 
+    const currentTracks = useMemo(() => {
+        type ValidTrackItem = (LikedSongItem | PlaylistTrackItem) & { track: SpotifyTrack };
+        return rawTracks.filter((item): item is ValidTrackItem => item.track !== null);
+    }, [rawTracks]);
 
     const {
         artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList, 

@@ -1,46 +1,13 @@
 // src/app/api/spotify/liked-songs/route.ts
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/authOptions"; // Or the correct path
+import { authOptions } from "@/lib/authOptions";
 import { NextResponse } from "next/server";
+import { LikedSongItem } from "@/types"; // Import from the single source of truth
 
-// Define types for the Spotify API response (simplified)
-interface SpotifyArtist {
-    id: string;
-    name: string;
-    external_urls: { spotify: string };
-}
-
-interface SpotifyAlbumImage {
-    url: string;
-    height: number;
-    width: number;
-}
-
-interface SpotifyAlbum {
-    id: string;
-    name: string;
-    images: SpotifyAlbumImage[];
-    external_urls: { spotify: string };
-}
-
-interface SpotifyTrack {
-    id: string;
-    name: string;
-    uri: string;
-    artists: SpotifyArtist[];
-    album: SpotifyAlbum;
-    external_urls: { spotify: string };
-    preview_url: string | null;
-}
-
-interface SpotifySavedTrackItem {
-    added_at: string;
-    track: SpotifyTrack;
-}
-
+// Define the structure of the paginated API response from Spotify for liked songs
 interface SpotifySavedTracksResponse {
     href: string;
-    items: SpotifySavedTrackItem[];
+    items: LikedSongItem[];
     limit: number;
     next: string | null;
     offset: number;
@@ -48,9 +15,7 @@ interface SpotifySavedTracksResponse {
     total: number;
 }
 
-
 export async function GET() {
-    // 1. Get the session and access token
     const session = await getServerSession(authOptions);
 
     if (!session || !session.accessToken) {
@@ -58,11 +23,12 @@ export async function GET() {
     }
 
     const accessToken = session.accessToken;
-    let allTracks: SpotifySavedTrackItem[] = [];
-    let nextUrl: string | null = `https://api.spotify.com/v1/me/tracks?limit=50`
+    let allTracks: LikedSongItem[] = [];
+    
+    // OPTIMIZED: Use the `fields` parameter to fetch only the necessary data
+    let nextUrl: string | null = `https://api.spotify.com/v1/me/tracks?limit=50&fields=next,items(added_at,track(id,name,uri,artists(name)))`;
 
     try {
-        // 2. Fetch liked songs, handling pagination
         while (nextUrl) {
             const response = await fetch(nextUrl, {
                 headers: {
@@ -72,7 +38,7 @@ export async function GET() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error("Spotify API Error:", errorData);
+                console.error("Spotify API Error (Liked Songs):", errorData);
                 return NextResponse.json(
                     { error: "Failed to fetch liked songs from Spotify", details: errorData },
                     { status: response.status }
@@ -81,12 +47,8 @@ export async function GET() {
 
             const data = (await response.json()) as SpotifySavedTracksResponse;
             allTracks = allTracks.concat(data.items);
-            nextUrl = data.next; // Get the URL for the next page of results
+            nextUrl = data.next;
         }
-
-        // 3. Optionally, transform the data before sending it back
-        // For now, we'll send the raw track items
-        // In the future, we might just extract artist names and countries here.
 
         return NextResponse.json({ tracks: allTracks, total: allTracks.length });
 

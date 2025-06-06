@@ -1,135 +1,95 @@
 // src/types.ts
 
-// --- Spotify Data Types ---
-export interface Artist {
-    id: string;
-    name: string;
-    external_urls?: { spotify: string }; // Optional as not always used directly
-  }
-  
-  export interface AlbumImage {
-    url: string;
-    height?: number; // Optional
-    width?: number;  // Optional
-  }
-  
-  export interface Album {
-    id: string;
-    name: string;
-    images: AlbumImage[];
-    external_urls?: { spotify: string }; // Optional
-  }
-  
-  export interface Track {
-    id: string;
-    name: string;
-    artists: Artist[];
-    album: Album;
-    external_urls?: { spotify: string }; // Optional
-    preview_url?: string | null;       // Optional
-    uri?: string; // Often useful: spotify:track:TRACK_ID
-  }
-  
-  export interface LikedSongItem {
-    added_at: string;
-    track: Track;
-  }
-  
-  export interface PlaylistItem {
-    id: string;
-    name: string;
-    description?: string;
-    owner?: { display_name?: string; id: string; };
-    images?: SpotifyPlaylistImage[]; // Using specific type if different
-    tracks: {
-      href?: string;
-      total: number;
-    };
-    public?: boolean;
-    collaborative?: boolean;
-    external_urls?: { spotify: string };
-  }
-  // Specific type for playlist images if needed, or reuse AlbumImage
-  export interface SpotifyPlaylistImage {
-      url: string;
-      height: number | null;
-      width: number | null;
-  }
-  
-  
-  export interface PlaylistTrackItem {
-    added_at: string;
-    added_by?: { id: string; type?: string; uri?: string; }; // Optional
-    is_local?: boolean; // Optional
-    track: Track; // Assuming track is not null after filtering in API route
-  }
-  
-  // --- MusicBrainz API Related Types (from your backend to frontend) ---
-  export interface ArtistInfoFromAPI {
-    artistName: string;      // The original query name
-    country: string | null;
-    mbid: string | null;
-    nameFound: string | null;  // Actual name found on MusicBrainz
-    source: "db_cache" | "api_fetched" | "api_not_found" | "api_no_match"; // To know where it came from
-  }
-  
-  // --- UI Specific Types ---
-  export interface ArtistDetail { // For the Country Details Panel
-    name: string;
-    songs: Array<{ id: string; name: string }>; // Simplified song info for the panel
-  }
-  
-  export interface SelectedCountryInfo { // For the Country Details Panel
-    isoCode: string;
-    name: string;
-    songCount: number;
-    artists: ArtistDetail[];
-  }
-  
-  export interface LegendItem { // For MapLegend component
-    color: string;
-    label: string;
-  }
-  
-  export interface UnknownsListItem { // For the Unknowns Window
-      trackName: string;
-      artistName: string;
-  }
-  
-  // --- Theme Type ---
-  export type AppTheme = 'light' | 'dark';
-  
-  // --- You can add more specific types for API responses if needed ---
-  // Example for Spotify devices (if you implement device selection)
-  export interface SpotifyDevice {
-      id: string | null; // Can be null
-      is_active: boolean;
-      is_private_session: boolean;
-      is_restricted: boolean;
-      name: string;
-      type: string; // e.g., "Computer", "Smartphone", "Speaker"
-      volume_percent: number | null; // Can be null
-  }
-  
-  export interface SpotifyDevicesResponse {
-      devices: SpotifyDevice[];
-  }
+// --- LEAN SPOTIFY API DATA TYPES (Single Source of Truth) ---
+// These types define the minimal data we fetch from Spotify to improve performance.
 
-  export interface SelectedCountryInfo { // For the single Country Details Panel
-    isoCode: string;
-    name: string;
-    songCount: number;
-    artists: ArtistDetail[];
-  }
-  
-  export interface SelectedCountryBasicInfo { // For tracking multi-selected countries
-    isoCode: string;
-    name: string;
-  }
-  
-  export interface MultiCountryDisplayInfo { // For displaying aggregated multi-country data
-    countries: Array<SelectedCountryBasicInfo & { songCount: number }>;
-    totalSongCount: number;
-    artists: ArtistDetail[];
-    allTrackUris: string[];
-  }
+/** A lean artist object from Spotify */
+export interface SpotifyArtist {
+  name: string;
+}
+
+/** A lean track object from Spotify, containing only the fields needed by the app */
+export interface SpotifyTrack {
+  id: string;
+  name: string;
+  uri: string;
+  artists: SpotifyArtist[];
+}
+
+/** An item from the "Liked Songs" list */
+export interface LikedSongItem {
+  added_at: string;
+  track: SpotifyTrack;
+}
+
+/** An item from a specific playlist */
+export interface PlaylistTrackItem {
+  added_at: string;
+  track: SpotifyTrack | null; // Track can be null if unavailable in a playlist
+}
+
+/** A lean playlist object for the main playlist list */
+export interface PlaylistItem {
+  id: string;
+  name: string;
+  tracks: {
+    total: number;
+  };
+}
+
+
+// --- MUSICBRAINZ API & CACHE TYPES ---
+export interface ArtistInfoFromAPI {
+  artistName: string;
+  country: string | null;
+  mbid: string | null;
+  nameFound: string | null;
+  source: "db_cache" | "api_fetched" | "api_not_found" | "api_no_match";
+}
+
+
+// --- UI & DATA AGGREGATION SPECIFIC TYPES ---
+// These types are used for processing and displaying data in the frontend.
+
+/** Detailed artist info for the country details panel */
+export interface ArtistDetail {
+  name: string;
+  songs: Array<{ id: string; name: string }>;
+}
+
+/** Data for the panel when a single country is selected */
+export interface SelectedCountryInfo {
+  isoCode: string;
+  name: string;
+  songCount: number;
+  artists: ArtistDetail[];
+}
+
+/** Basic info for tracking multi-selected countries */
+export interface SelectedCountryBasicInfo {
+isoCode: string;
+name: string;
+}
+
+/** Data for the panel when multiple countries are selected */
+export interface MultiCountryDisplayInfo {
+countries: Array<SelectedCountryBasicInfo & { songCount: number }>;
+totalSongCount: number;
+artists: ArtistDetail[];
+allTrackUris: string[];
+}
+
+/** For the map legend component */
+export interface LegendItem {
+  color: string;
+  label: string;
+}
+
+/** For the "Unknown Origins" panel */
+export interface UnknownsListItem {
+  trackName: string;
+  artistName: string;
+}
+
+/** For the theme context */
+export type AppTheme = 'light' | 'dark';

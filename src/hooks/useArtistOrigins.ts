@@ -1,8 +1,8 @@
 // src/hooks/useArtistOrigins.ts
 import { useState, useCallback, useEffect } from 'react';
-import { Track, ArtistInfoFromAPI, UnknownsListItem } from '@/types'; //
+import { SpotifyTrack, ArtistInfoFromAPI, UnknownsListItem } from '@/types'; //
 
-const getUniqueFirstArtistsFromTracks = (tracks: Array<{ track: Track }>): string[] => { //
+const getUniqueFirstArtistsFromTracks = (tracks: Array<{ track: SpotifyTrack }>): string[] => { //
     const firstArtists = new Set<string>();
     tracks.forEach(item => {
         if (item.track?.artists && item.track.artists.length > 0) {
@@ -13,7 +13,7 @@ const getUniqueFirstArtistsFromTracks = (tracks: Array<{ track: Track }>): strin
     return Array.from(firstArtists);
 };
 
-export function useArtistOrigins(currentTracks: Array<{track: Track}>) {
+export function useArtistOrigins(currentTracks: Array<{track: SpotifyTrack}>) {
     const [artistCountries, setArtistCountries] = useState<Map<string, string | null>>(new Map());
     const [isLoadingArtistCountries, setIsLoadingArtistCountries] = useState(false);
     const [unknownsCount, setUnknownsCount] = useState(0);

@@ -1,9 +1,9 @@
 // src/hooks/useMapData.ts
 import { useState, useEffect, useCallback } from 'react';
-import { Track } from '@/types';
+import { SpotifyTrack } from '@/types';
 
 export function useMapData(
-    currentTracks: Array<{ track: Track }>,
+    currentTracks: Array<{ track: SpotifyTrack }>,
     artistCountries: Map<string, string | null>,
     isLoadingOrigins: boolean // Add this new prop
 ) {

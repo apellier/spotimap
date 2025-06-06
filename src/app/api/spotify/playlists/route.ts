@@ -1,40 +1,13 @@
 // src/app/api/spotify/playlists/route.ts
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/authOptions"; // Or the correct path
+import { authOptions } from "@/lib/authOptions";
 import { NextResponse } from "next/server";
+import { PlaylistItem } from "@/types"; // Import from the single source of truth
 
-// Simplified types for Spotify Playlist objects
-interface SpotifyPlaylistOwner {
-    display_name: string;
-    id: string;
-}
-
-interface SpotifyPlaylistImage {
-    url: string;
-    height: number | null;
-    width: number | null;
-}
-
-interface SpotifyPlaylistTracksInfo {
-    href: string;
-    total: number;
-}
-
-interface SpotifyPlaylistItem {
-    id: string;
-    name: string;
-    description: string;
-    owner: SpotifyPlaylistOwner;
-    images: SpotifyPlaylistImage[];
-    tracks: SpotifyPlaylistTracksInfo; // Provides total number of tracks and a link to fetch them
-    public: boolean;
-    collaborative: boolean;
-    external_urls: { spotify: string };
-}
-
+// Define the structure of the paginated API response from Spotify for playlists
 interface SpotifyUserPlaylistsResponse {
     href: string;
-    items: SpotifyPlaylistItem[];
+    items: PlaylistItem[];
     limit: number;
     next: string | null;
     offset: number;
@@ -50,9 +23,10 @@ export async function GET() {
     }
 
     const accessToken = session.accessToken;
-    let allPlaylists: SpotifyPlaylistItem[] = [];
-    // Max limit for playlists is 50 per request
-    let nextUrl: string | null = `https://api.spotify.com/v1/me/playlists?limit=50`;
+    let allPlaylists: PlaylistItem[] = [];
+    
+    // OPTIMIZED: Use the `fields` parameter to fetch only the necessary data
+    let nextUrl: string | null = `https://api.spotify.com/v1/me/playlists?limit=50&fields=next,items(id,name,tracks(total))`;
 
     try {
         while (nextUrl) {
@@ -73,7 +47,7 @@ export async function GET() {
 
             const data = (await response.json()) as SpotifyUserPlaylistsResponse;
             allPlaylists = allPlaylists.concat(data.items);
-            nextUrl = data.next; // URL for the next page of results, or null if no more pages
+            nextUrl = data.next;
         }
 
         return NextResponse.json({ playlists: allPlaylists, total: allPlaylists.length });
