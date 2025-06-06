@@ -10,6 +10,29 @@ interface SpotifyUserPlaylistsResponse {
     total: number;
 }
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3, backoff = 300): Promise<Response> {
+    try {
+        const response = await fetch(url, options);
+        if (response.status === 429 && retries > 0) {
+            const retryAfter = response.headers.get('Retry-After');
+            const wait = retryAfter ? parseInt(retryAfter, 10) * 1000 : backoff;
+            console.warn(`Rate limited. Retrying after ${wait}ms... (Retries left: ${retries})`);
+            await delay(wait);
+            return fetchWithRetry(url, options, retries - 1, backoff * 2);
+        }
+        return response;
+    } catch (error) {
+        if (retries > 0) {
+            console.warn(`Fetch failed. Retrying after ${backoff}ms... (Retries left: ${retries})`, error);
+            await delay(backoff);
+            return fetchWithRetry(url, options, retries - 1, backoff * 2);
+        }
+        throw error;
+    }
+}
+
 export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session || !session.accessToken) {
@@ -22,7 +45,7 @@ export async function GET() {
     const firstUrl = `https://api.spotify.com/v1/me/playlists?limit=${limit}&fields=${fields}`;
 
     try {
-        const firstResponse = await fetch(firstUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+        const firstResponse = await fetchWithRetry(firstUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
         if (!firstResponse.ok) throw new Error("Failed to fetch initial playlists");
         
         const firstPage: SpotifyUserPlaylistsResponse = await firstResponse.json();
@@ -33,21 +56,35 @@ export async function GET() {
             const fetchFunctions: (() => Promise<Response>)[] = [];
             for (let offset = limit; offset < totalPlaylists; offset += limit) {
                 const url = `https://api.spotify.com/v1/me/playlists?limit=${limit}&offset=${offset}&fields=${fields}`;
-                fetchFunctions.push(() => fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } }));
+                fetchFunctions.push(() => fetchWithRetry(url, { headers: { Authorization: `Bearer ${accessToken}` } }));
             }
             
             const batchSize = 10;
+            const delayBetweenBatches = 50;
+
             for (let i = 0; i < fetchFunctions.length; i += batchSize) {
-                const batchPromises = fetchFunctions.slice(i, i + batchSize).map(func => func());
+                const batch = fetchFunctions.slice(i, i + batchSize);
+                const batchPromises = batch.map(func => func());
+                
                 const responses = await Promise.all(batchPromises);
 
                 const additionalPages = await Promise.all(
-                    responses.map(res => res.ok ? (res.json() as Promise<SpotifyUserPlaylistsResponse>) : null)
+                    responses.map(res => {
+                        if (res && res.ok) {
+                            return res.json() as Promise<SpotifyUserPlaylistsResponse>;
+                        }
+                        console.error(`A request in a batch failed permanently and will be skipped.`);
+                        return null;
+                    })
                 );
                 
                 additionalPages.forEach(page => {
                     if (page?.items) allPlaylists = allPlaylists.concat(page.items);
                 });
+                
+                if (i + batchSize < fetchFunctions.length) {
+                    await delay(delayBetweenBatches);
+                }
             }
         }
         
