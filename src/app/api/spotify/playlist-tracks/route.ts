@@ -2,63 +2,64 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { NextRequest, NextResponse } from "next/server";
-import { PlaylistTrackItem } from "@/types"; // Import from the single source of truth
+import { PlaylistTrackItem } from "@/types";
 
-// Define the structure of the paginated API response from Spotify for playlist tracks
 interface SpotifyPlaylistTracksResponse {
-    href: string;
     items: PlaylistTrackItem[];
-    limit: number;
     next: string | null;
-    offset: number;
-    previous: string | null;
     total: number;
 }
 
 export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
-
     if (!session || !session.accessToken) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const playlistId = searchParams.get("playlist_id");
-
     if (!playlistId) {
         return NextResponse.json({ error: "Playlist ID is required" }, { status: 400 });
     }
 
     const accessToken = session.accessToken;
-    let allPlaylistTracks: PlaylistTrackItem[] = [];
-    
-    // OPTIMIZED: Use the `fields` parameter to fetch only the necessary data
-    let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50&fields=next,items(added_at,track(id,name,uri,artists(name)))`;
+    const limit = 50;
+    const fields = 'total,next,items(added_at,track(id,name,uri,artists(name)))';
+    const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&fields=${fields}`;
 
     try {
-        while (nextUrl) {
-            const response = await fetch(nextUrl, {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-            });
+        const firstResponse = await fetch(firstUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!firstResponse.ok) throw new Error(`Failed to fetch initial tracks for playlist ${playlistId}`);
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error(`Spotify API Error (Playlist Tracks for ${playlistId}):`, errorData);
-                return NextResponse.json(
-                    { error: `Failed to fetch tracks for playlist ${playlistId}`, details: errorData },
-                    { status: response.status }
-                );
+        const firstPage: SpotifyPlaylistTracksResponse = await firstResponse.json();
+        const totalTracks = firstPage.total;
+        let allPlaylistTracks = firstPage.items.filter(item => item.track !== null);
+
+        if (totalTracks > limit) {
+            const fetchFunctions: (() => Promise<Response>)[] = [];
+            for (let offset = limit; offset < totalTracks; offset += limit) {
+                const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&fields=${fields}`;
+                fetchFunctions.push(() => fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } }));
             }
+            
+            const batchSize = 10;
+            for (let i = 0; i < fetchFunctions.length; i += batchSize) {
+                const batchPromises = fetchFunctions.slice(i, i + batchSize).map(func => func());
+                const responses = await Promise.all(batchPromises);
 
-            const data = (await response.json()) as SpotifyPlaylistTracksResponse;
-            // Filter out any items where track is null (can happen if a track is no longer available)
-            const validItems = data.items.filter(item => item.track !== null);
-            allPlaylistTracks = allPlaylistTracks.concat(validItems);
-            nextUrl = data.next;
+                const additionalPages = await Promise.all(
+                    responses.map(res => res.ok ? (res.json() as Promise<SpotifyPlaylistTracksResponse>) : null)
+                );
+
+                additionalPages.forEach(page => {
+                    if (page?.items) {
+                        const validItems = page.items.filter(item => item.track !== null);
+                        allPlaylistTracks = allPlaylistTracks.concat(validItems);
+                    }
+                });
+            }
         }
-
+        
         return NextResponse.json({ tracks: allPlaylistTracks, total: allPlaylistTracks.length });
 
     } catch (error) {

@@ -2,52 +2,60 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { NextResponse } from "next/server";
-import { LikedSongItem } from "@/types"; // Import from the single source of truth
+import { LikedSongItem } from "@/types";
 
-// Define the structure of the paginated API response from Spotify for liked songs
 interface SpotifySavedTracksResponse {
-    href: string;
     items: LikedSongItem[];
-    limit: number;
     next: string | null;
-    offset: number;
-    previous: string | null;
     total: number;
 }
 
 export async function GET() {
     const session = await getServerSession(authOptions);
-
     if (!session || !session.accessToken) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const accessToken = session.accessToken;
-    let allTracks: LikedSongItem[] = [];
-    
-    // OPTIMIZED: Use the `fields` parameter to fetch only the necessary data
-    let nextUrl: string | null = `https://api.spotify.com/v1/me/tracks?limit=50&fields=next,items(added_at,track(id,name,uri,artists(name)))`;
+    const limit = 50;
+    const fields = 'total,next,items(added_at,track(id,name,uri,artists(name)))';
+    const firstUrl = `https://api.spotify.com/v1/me/tracks?limit=${limit}&fields=${fields}`;
 
     try {
-        while (nextUrl) {
-            const response = await fetch(nextUrl, {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-            });
+        const firstResponse = await fetch(firstUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!firstResponse.ok) throw new Error("Failed to fetch initial liked songs");
+        
+        const firstPage: SpotifySavedTracksResponse = await firstResponse.json();
+        const totalTracks = firstPage.total;
+        let allTracks = firstPage.items;
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error("Spotify API Error (Liked Songs):", errorData);
-                return NextResponse.json(
-                    { error: "Failed to fetch liked songs from Spotify", details: errorData },
-                    { status: response.status }
-                );
+        if (totalTracks > limit) {
+            const fetchFunctions: (() => Promise<Response>)[] = [];
+            for (let offset = limit; offset < totalTracks; offset += limit) {
+                const url = `https://api.spotify.com/v1/me/tracks?limit=${limit}&offset=${offset}&fields=${fields}`;
+                fetchFunctions.push(() => fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } }));
             }
 
-            const data = (await response.json()) as SpotifySavedTracksResponse;
-            allTracks = allTracks.concat(data.items);
-            nextUrl = data.next;
+            // --- BATCHING LOGIC ---
+            const batchSize = 10; // Process 10 requests at a time to avoid rate limiting
+            for (let i = 0; i < fetchFunctions.length; i += batchSize) {
+                const batchPromises = fetchFunctions.slice(i, i + batchSize).map(func => func());
+                const responses = await Promise.all(batchPromises);
+
+                const additionalPages = await Promise.all(
+                    responses.map(res => {
+                        if (!res.ok) {
+                            console.error(`Spotify API Error (Liked Songs - Batch): Status ${res.status}`);
+                            return null; // Gracefully handle failed requests in a batch
+                        }
+                        return res.json() as Promise<SpotifySavedTracksResponse>;
+                    })
+                );
+
+                additionalPages.forEach(page => {
+                    if (page?.items) allTracks = allTracks.concat(page.items);
+                });
+            }
         }
 
         return NextResponse.json({ tracks: allTracks, total: allTracks.length });

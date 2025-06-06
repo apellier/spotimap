@@ -2,54 +2,55 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { NextResponse } from "next/server";
-import { PlaylistItem } from "@/types"; // Import from the single source of truth
+import { PlaylistItem } from "@/types";
 
-// Define the structure of the paginated API response from Spotify for playlists
 interface SpotifyUserPlaylistsResponse {
-    href: string;
     items: PlaylistItem[];
-    limit: number;
     next: string | null;
-    offset: number;
-    previous: string | null;
     total: number;
 }
 
 export async function GET() {
     const session = await getServerSession(authOptions);
-
     if (!session || !session.accessToken) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const accessToken = session.accessToken;
-    let allPlaylists: PlaylistItem[] = [];
-    
-    // OPTIMIZED: Use the `fields` parameter to fetch only the necessary data
-    let nextUrl: string | null = `https://api.spotify.com/v1/me/playlists?limit=50&fields=next,items(id,name,tracks(total))`;
+    const limit = 50;
+    const fields = 'total,next,items(id,name,tracks(total))';
+    const firstUrl = `https://api.spotify.com/v1/me/playlists?limit=${limit}&fields=${fields}`;
 
     try {
-        while (nextUrl) {
-            const response = await fetch(nextUrl, {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-            });
+        const firstResponse = await fetch(firstUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!firstResponse.ok) throw new Error("Failed to fetch initial playlists");
+        
+        const firstPage: SpotifyUserPlaylistsResponse = await firstResponse.json();
+        const totalPlaylists = firstPage.total;
+        let allPlaylists = firstPage.items;
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error("Spotify API Error (Playlists):", errorData);
-                return NextResponse.json(
-                    { error: "Failed to fetch playlists from Spotify", details: errorData },
-                    { status: response.status }
-                );
+        if (totalPlaylists > limit) {
+            const fetchFunctions: (() => Promise<Response>)[] = [];
+            for (let offset = limit; offset < totalPlaylists; offset += limit) {
+                const url = `https://api.spotify.com/v1/me/playlists?limit=${limit}&offset=${offset}&fields=${fields}`;
+                fetchFunctions.push(() => fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } }));
             }
+            
+            const batchSize = 10;
+            for (let i = 0; i < fetchFunctions.length; i += batchSize) {
+                const batchPromises = fetchFunctions.slice(i, i + batchSize).map(func => func());
+                const responses = await Promise.all(batchPromises);
 
-            const data = (await response.json()) as SpotifyUserPlaylistsResponse;
-            allPlaylists = allPlaylists.concat(data.items);
-            nextUrl = data.next;
+                const additionalPages = await Promise.all(
+                    responses.map(res => res.ok ? (res.json() as Promise<SpotifyUserPlaylistsResponse>) : null)
+                );
+                
+                additionalPages.forEach(page => {
+                    if (page?.items) allPlaylists = allPlaylists.concat(page.items);
+                });
+            }
         }
-
+        
         return NextResponse.json({ playlists: allPlaylists, total: allPlaylists.length });
 
     } catch (error) {
