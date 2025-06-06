@@ -18,10 +18,13 @@ import LoginScreen from '@/components/LoginScreen';
 import CountryDetailsPanel from '@/components/CountryDetailsPanel';
 import UnknownsPanel from '@/components/UnknownsPanel';
 import StatusLoader from '@/components/StatusLoader';
+import MapControlPanel from "@/components/MapControlPanel";
 
 // Import Types
 import { 
-    SelectedCountryInfo, 
+    SelectedCountryInfo,
+    LikedSongItem,
+    PlaylistTrackItem,
     Track, 
     LegendItem, 
     ArtistDetail, 
@@ -79,7 +82,8 @@ export default function HomePage() {
     const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>("");
     const [currentSourceLabel, setCurrentSourceLabel] = useState<string>("Select Source");
 
-    const currentTracks: Array<{ track: Track }> = selectedPlaylistId ? playlistTracks : likedSongs;
+    const currentTracks: Array<LikedSongItem | PlaylistTrackItem> = selectedPlaylistId ? playlistTracks : likedSongs;
+
 
     const {
         artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList, 
@@ -461,7 +465,86 @@ export default function HomePage() {
         } finally { setIsCreatingPlaylist(false); }
     }, [session, multiCountryDisplayData, setIsCreatingPlaylist, setPlaylistCreationStatus, setPlaybackError]);
 
+    const [isTimelineActive, setIsTimelineActive] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [timelineFrame, setTimelineFrame] = useState(0); // The current position (index) in the timeline
+    const [timelineSpeed, setTimelineSpeed] = useState(50);
 
+    const timelineData = useMemo(() => {
+        if (!isTimelineActive || currentTracks.length === 0 || artistCountries.size === 0) {
+            return [];
+        }
+    
+        console.log("Preparing timeline data...");
+        
+        // Define the type for our timeline items for clarity
+        type TimelineItem = { added_at: Date; country: string; trackName: string };
+    
+        const datedTracks = currentTracks
+            .map(item => {
+                const artistName = item.track?.artists?.[0]?.name.toLowerCase();
+                const country = artistName ? artistCountries.get(artistName) : null;
+                
+                const addedDate = new Date(item.added_at);
+                if (!country || isNaN(addedDate.getTime()) || !item.track.name) {
+                    return null;
+                }
+    
+                return {
+                    added_at: addedDate,
+                    country: country,
+                    trackName: item.track.name,
+                };
+            })
+            .filter((track): track is TimelineItem => track !== null);
+    
+        datedTracks.sort((a, b) => a.added_at.getTime() - b.added_at.getTime());
+        
+        return datedTracks;
+    
+    }, [isTimelineActive, currentTracks, artistCountries]);
+
+    // --- NEW: Calculate map counts based on the current timeline frame ---
+    const timelineMapCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        // If the timeline isn't active or data isn't ready, return empty counts
+        if (!isTimelineActive || timelineData.length === 0) {
+            return counts;
+        }
+
+        // Get the slice of tracks from the beginning up to the current frame
+        const frameSlice = timelineData.slice(0, timelineFrame);
+
+        // Calculate the song counts for this slice
+        frameSlice.forEach(track => {
+            counts.set(track.country, (counts.get(track.country) || 0) + 1);
+        });
+
+        return counts;
+    }, [isTimelineActive, timelineFrame, timelineData]);
+
+    useEffect(() => {
+        // Only run the interval if timeline is active and isPlaying is true
+        if (!isPlaying || !isTimelineActive) {
+            return;
+        }
+
+        const timer = setInterval(() => {
+            setTimelineFrame(prevFrame => {
+                if (prevFrame >= timelineData.length) {
+                    setIsPlaying(false); // Stop when the end is reached
+                    return prevFrame;
+                }
+                // A 'step' could be one song or a group of songs for faster animation
+                return prevFrame + 1; 
+            });
+        }, timelineSpeed);
+
+        // Cleanup function to clear the interval
+        return () => clearInterval(timer);
+    }, [isPlaying, isTimelineActive, timelineData.length, timelineSpeed]);
+
+    // RENDER LOGIC
     if (authStatus === "loading" && !session && !loaderMessage) {
         return <div className="flex min-h-screen items-center justify-center text-lg text-nb-text/70">Authenticating...</div>;
     }
@@ -492,41 +575,37 @@ export default function HomePage() {
             <main className="flex flex-grow pt-[55px]">
                 <div className="relative flex-grow">
                     
-                <div className="absolute top-[70px] right-nb-md z-[550] flex flex-col space-y-2 items-end" 
-     style={{ marginTop: '10px' }} // Adjust positioning as needed
->
-    <button
-        onClick={() => {
-            setIsMultiSelectModeActive(prev => !prev);
-            // Optional: When exiting multi-select mode, you might want to clear the selection
-            // if (!isMultiSelectModeActive) { // If it was true and is now becoming false
-            // setMultiSelectedCountries([]);
-            // }
-        }}
-        className={`btn px-nb-sm py-1 text-xs ${isMultiSelectModeActive ? 'btn-accent' : 'btn-outline'}`}
-    >
-        {isMultiSelectModeActive ? 'Cancel Multi-Select' : 'Select Multiple Countries'}
-    </button>
-
-    {multiSelectedCountries.length > 0 && !isMultiCountryPanelOpen && !isSingleCountryPanelOpen && (
-        <button
-            onClick={handleShowMultiCountryDetails}
-            className="btn btn-accent px-nb-md py-nb-sm"
-        >
-            Details for {multiSelectedCountries.length} Countries
-        </button>
-    )}
-</div>
+                    {/* Render the new control panel only when data is loaded */}
+                    {(currentTracks.length > 0 && !isLoadingAnythingNonAuth) && (
+                        <MapControlPanel
+                            isTimelineActive={isTimelineActive}
+                            isMultiSelectModeActive={isMultiSelectModeActive}
+                            multiSelectedCountriesCount={multiSelectedCountries.length}
+                            isAnyPanelOpen={isSingleCountryPanelOpen || isMultiCountryPanelOpen}
+                            onToggleTimeline={() => {
+                                const isNowActivating = !isTimelineActive;
+                                setIsTimelineActive(isNowActivating);
+                                setIsPlaying(isNowActivating); // Auto-play when activating
+                                setTimelineFrame(0);
+                                if (isNowActivating) { // Clear other selections when starting timeline
+                                    setMultiSelectedCountries([]);
+                                    setIsMultiSelectModeActive(false);
+                                }
+                            }}
+                            onToggleMultiSelect={() => setIsMultiSelectModeActive(prev => !prev)}
+                            onShowMultiCountryDetails={handleShowMultiCountryDetails}
+                        />
+                    )}
                     
-                    
-                    {(currentTracks.length > 0 || isLoadingLikedSongs || isLoadingPlaylistTracks || (isLoadingPlaylists && playlists.length ===0 && loaderMessage) ) ? (
+                    {/* Main Content: Map or Placeholder Text */}
+                    {(currentTracks.length > 0 || isLoadingAnythingNonAuth ) ? (
                         <>
                             <MapComponent
-                                countrySongCounts={countrySongCounts}
+                                countrySongCounts={isTimelineActive ? timelineMapCounts : countrySongCounts}
                                 onCountryClick={handleMapClick}
-                                selectedIsoCodes={codesToHighlightOnMap} // Correctly passed
+                                selectedIsoCodes={codesToHighlightOnMap}
                             />
-                            {legendItems.length > 0 && <MapLegend legendItems={legendItems} />}
+                            {!isTimelineActive && legendItems.length > 0 && <MapLegend legendItems={legendItems} />}
                         </>
                     ) : (
                          !loaderMessage && (
@@ -535,11 +614,37 @@ export default function HomePage() {
                             </div>
                          )
                     )}
+
                     <UnknownsPanel
                         isOpen={isUnknownsWindowOpen}
                         onClose={() => setIsUnknownsWindowOpen(false)}
                         unknownsList={unknownsList}
                     />
+
+                    {/* Timeline Controls Panel (Bottom) */}
+                    {isTimelineActive && timelineData.length > 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 z-[1100] bg-nb-bg/80 p-4 shadow-lg backdrop-blur-sm">
+                            <div className="relative flex items-center gap-4 max-w-screen-md mx-auto">
+                                <button onClick={() => setIsPlaying(prev => !prev)} className="btn btn-icon w-12 h-12 text-xl">{isPlaying ? '❚❚' : '▶'}</button>
+                                <button onClick={() => { setTimelineFrame(0); setIsPlaying(false); }} className="btn btn-icon text-xl">↺</button>
+                                <div className="flex-grow text-center">
+                                    <input type="range" min="0" max={timelineData.length} value={timelineFrame} onChange={(e) => { setIsPlaying(false); setTimelineFrame(Number(e.target.value)); }} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
+                                    <div className="text-xs mt-1 text-nb-text/80">{timelineData[timelineFrame - 1]?.added_at.toLocaleDateString() || "Start"}</div>
+                                </div>
+                                <div className="w-40 text-left text-xs hidden sm:block">
+                                    <p className="font-bold truncate">Now Adding:</p>
+                                    <p className="truncate">{timelineData[timelineFrame - 1]?.trackName || "..."}</p>
+                                </div>
+                                <button
+                                    onClick={() => { setIsTimelineActive(false); setIsPlaying(false); }}
+                                    className="btn btn-icon absolute -top-2 -right-2 w-8 h-8 text-2xl flex items-center justify-center"
+                                    title="Hide Timeline"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </main>
 
@@ -548,21 +653,14 @@ export default function HomePage() {
                 onClose={closeAnyPanelAndResets}
                 details={isMultiCountryPanelOpen ? multiCountryDisplayData : singleCountryDetails}
                 onPlaySong={handlePlaySong}
-                onPlayCountryRandomly={
-                    isMultiCountryPanelOpen && multiCountryDisplayData 
-                    ? handlePlayMultiCountryRandomly 
-                    : handlePlaySingleCountryRandomly // Use specific single-country handler
-                }
-                onSavePlaylist={
-                    isMultiCountryPanelOpen && multiCountryDisplayData
-                    ? handleSaveMultiCountryPlaylist
-                    : handleSaveSingleCountryPlaylist // Use specific single-country handler
-                }
+                onPlayCountryRandomly={isMultiCountryPanelOpen ? handlePlayMultiCountryRandomly : handlePlaySingleCountryRandomly}
+                onSavePlaylist={isMultiCountryPanelOpen ? handleSaveMultiCountryPlaylist : handleSaveSingleCountryPlaylist}
                 playbackLoading={playbackLoading}
                 playbackError={playbackError}
                 isCreatingPlaylist={isCreatingPlaylist}
                 playlistCreationStatus={playlistCreationStatus}
             />
+            
             <Analytics />
             <SpeedInsights />
         </div>
