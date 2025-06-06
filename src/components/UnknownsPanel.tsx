@@ -3,7 +3,7 @@
 
 import React from 'react';
 import styles from '../app/page.module.css'; // Using styles from page.module.css
-import { Track } from '@/types'; // Assuming Track type has artist info needed
+import { SpotifyTrack } from '@/types'; // Assuming Track type has artist info needed
 
 interface UnknownsPanelProps {
     isOpen: boolean;
