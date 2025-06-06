@@ -22,7 +22,9 @@ import MapControlPanel from "@/components/MapControlPanel";
 
 // Import Types
 import { 
-    SelectedCountryInfo, 
+    SelectedCountryInfo,
+    LikedSongItem,
+    PlaylistTrackItem,
     Track, 
     LegendItem, 
     ArtistDetail, 
@@ -80,7 +82,8 @@ export default function HomePage() {
     const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>("");
     const [currentSourceLabel, setCurrentSourceLabel] = useState<string>("Select Source");
 
-    const currentTracks: Array<{ track: Track }> = selectedPlaylistId ? playlistTracks : likedSongs;
+    const currentTracks: Array<LikedSongItem | PlaylistTrackItem> = selectedPlaylistId ? playlistTracks : likedSongs;
+
 
     const {
         artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList, 
