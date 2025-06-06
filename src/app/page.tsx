@@ -471,37 +471,37 @@ export default function HomePage() {
     const [timelineSpeed, setTimelineSpeed] = useState(50);
 
     const timelineData = useMemo(() => {
-        // This runs only when the timeline is activated or the source tracks/origins change
         if (!isTimelineActive || currentTracks.length === 0 || artistCountries.size === 0) {
             return [];
         }
-
+    
         console.log("Preparing timeline data...");
+        
+        // Define the type for our timeline items for clarity
+        type TimelineItem = { added_at: Date; country: string; trackName: string };
+    
         const datedTracks = currentTracks
             .map(item => {
-                // The 'item' is a LikedSongItem or PlaylistTrackItem which has an 'added_at' property
                 const artistName = item.track?.artists?.[0]?.name.toLowerCase();
                 const country = artistName ? artistCountries.get(artistName) : null;
                 
-                // Ensure we have a valid date and a country for the track
                 const addedDate = new Date(item.added_at);
-                if (!country || isNaN(addedDate.getTime())) {
+                if (!country || isNaN(addedDate.getTime()) || !item.track.name) {
                     return null;
                 }
-
+    
                 return {
                     added_at: addedDate,
                     country: country,
-                    trackName: item.track.name, // For display on the timeline UI
+                    trackName: item.track.name,
                 };
             })
-            .filter(Boolean); // Filter out any null entries
-
-        // Sort all tracks chronologically
+            .filter((track): track is TimelineItem => track !== null);
+    
         datedTracks.sort((a, b) => a.added_at.getTime() - b.added_at.getTime());
         
-        return datedTracks as { added_at: Date; country: string; trackName: string }[];
-
+        return datedTracks;
+    
     }, [isTimelineActive, currentTracks, artistCountries]);
 
     // --- NEW: Calculate map counts based on the current timeline frame ---
