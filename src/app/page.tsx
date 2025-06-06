@@ -471,13 +471,14 @@ export default function HomePage() {
     const [timelineSpeed, setTimelineSpeed] = useState(50);
 
     const timelineData = useMemo(() => {
-        if (!isTimelineActive || currentTracks.length === 0 || artistCountries.size === 0) {
+        // FIX: Add a check for `isLoadingArtistCountries`.
+        // This ensures the expensive logic runs only ONCE after all data is ready.
+        if (!isTimelineActive || isLoadingArtistCountries || currentTracks.length === 0 || artistCountries.size === 0) {
             return [];
         }
     
-        console.log("Preparing timeline data...");
+        console.log("Preparing timeline data (now that artist origins are loaded)...");
         
-        // Define the type for our timeline items for clarity
         type TimelineItem = { added_at: Date; country: string; trackName: string };
     
         const datedTracks = currentTracks
@@ -498,11 +499,12 @@ export default function HomePage() {
             })
             .filter((track): track is TimelineItem => track !== null);
     
+        // This sort will now only run once per data set, after loading is complete.
         datedTracks.sort((a, b) => a.added_at.getTime() - b.added_at.getTime());
         
         return datedTracks;
     
-    }, [isTimelineActive, currentTracks, artistCountries]);
+    }, [isTimelineActive, currentTracks, artistCountries, isLoadingArtistCountries]);
 
     // --- NEW: Calculate map counts based on the current timeline frame ---
     const timelineMapCounts = useMemo(() => {
