@@ -20,6 +20,8 @@ interface MapComponentProps {
     countrySongCounts: Map<string, number>;
     onCountryClick: (isoCode: string, countryName: string, isShiftKey: boolean) => void;
     selectedIsoCodes: string[];
+    isExporting: boolean;
+    onExportComplete: () => void;
 }
 
 interface TooltipInfo {
@@ -29,7 +31,7 @@ interface TooltipInfo {
     y: number;
 }
 
-const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountryClick, selectedIsoCodes }) => {
+const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountryClick, selectedIsoCodes, isExporting, onExportComplete }) => {
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<OlMap | null>(null);
     const vectorLayerRef = useRef<VectorLayer<VectorSource<Feature<Geometry>>> | null>(null);
@@ -172,6 +174,66 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
         countriesLayer.setStyle(countryStyleFunction);
         countriesLayer.changed();
     }, [countrySongCounts, selectedIsoCodes]); // This effect handles style updates
+
+    useEffect(() => {
+        if (!isExporting || !mapRef.current) {
+            return;
+        }
+
+        const map = mapRef.current;
+        map.once('rendercomplete', () => {
+            try {
+                const mapCanvas = document.createElement('canvas');
+                const size = map.getSize();
+                if (!size) throw new Error("Map size not available.");
+
+                mapCanvas.width = size[0];
+                mapCanvas.height = size[1];
+                const mapContext = mapCanvas.getContext('2d');
+                if (!mapContext) throw new Error("Could not get canvas context.");
+
+                // Iterate through all canvas elements rendered by OpenLayers
+                Array.from(map.getViewport().querySelectorAll('.ol-layer canvas, canvas.ol-layer'))
+                    .forEach((canvas) => {
+                        if (canvas instanceof HTMLCanvasElement && canvas.width > 0) {
+                            const opacity = (canvas.parentNode as HTMLElement)?.style.opacity || canvas.style.opacity;
+                            mapContext.globalAlpha = opacity === '' ? 1 : Number(opacity);
+
+                            const transform = canvas.style.transform;
+                            // Get the transform matrix from the style and apply it
+                            if (transform) {
+                                const matrix = transform
+                                    .match(/^matrix\(([^)]*)\)$/)?.[1]
+                                    .split(',')
+                                    .map(Number);
+                                if (matrix) {
+                                    mapContext.setTransform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+                                }
+                            }
+                            mapContext.drawImage(canvas, 0, 0);
+                        }
+                    });
+
+                // Reset transform for safety
+                mapContext.globalAlpha = 1;
+                mapContext.setTransform(1, 0, 0, 1, 0, 0);
+                
+                // Trigger download
+                const link = document.createElement('a');
+                link.download = 'spotimap-export.png';
+                link.href = mapCanvas.toDataURL();
+                link.click();
+            } catch (error) {
+                console.error("Error exporting map:", error);
+            } finally {
+                // Signal completion regardless of success or failure
+                onExportComplete();
+            }
+        });
+
+        // Trigger a render to start the process
+        map.renderSync();
+    }, [isExporting, onExportComplete]);
 
     return (
         <div className="relative h-full w-full border-nb border-nb-border bg-nb-bg/5 shadow-nb">

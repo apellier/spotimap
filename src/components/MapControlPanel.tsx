@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import { ClockIcon, ListBulletIcon, MagnifyingGlassIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, ListBulletIcon, MagnifyingGlassIcon, ArrowPathIcon, ShareIcon } from '@heroicons/react/24/outline';
 
 interface MapControlPanelProps {
     isTimelineActive: boolean;
@@ -14,6 +14,8 @@ interface MapControlPanelProps {
     onShowMultiCountryDetails: () => void;
     onRescanUnknowns: () => void;
     isRescanning: boolean;
+    onExportMap: () => void;
+    isExporting: boolean;
 }
 
 const MapControlPanel: React.FC<MapControlPanelProps> = ({
@@ -26,8 +28,9 @@ const MapControlPanel: React.FC<MapControlPanelProps> = ({
     onShowMultiCountryDetails,
     onRescanUnknowns,
     isRescanning,
+    onExportMap,
+    isExporting,
 }) => {
-    // We'll hide the main controls if any details panel is open to reduce clutter
     if (isAnyPanelOpen) {
         return null;
     }
@@ -40,7 +43,6 @@ const MapControlPanel: React.FC<MapControlPanelProps> = ({
                 CONTROLS
             </h4>
             
-            {/* Show EITHER timeline controls OR map selection controls */}
             {isTimelineActive ? (
                 <button
                     onClick={onToggleTimeline}
@@ -74,6 +76,7 @@ const MapControlPanel: React.FC<MapControlPanelProps> = ({
                     >
                         <ClockIcon className="w-4 h-4" /> Show Geo-Timeline
                     </button>
+                    
                     <button 
                         onClick={onRescanUnknowns}
                         className="btn btn-outline text-xs w-full flex items-center justify-start gap-2 p-2"
@@ -82,6 +85,16 @@ const MapControlPanel: React.FC<MapControlPanelProps> = ({
                     >
                          <ArrowPathIcon className={`w-4 h-4 ${isRescanning ? 'animate-spin' : ''}`} />
                          {isRescanning ? 'Scanning...' : 'Re-scan Unknowns'}
+                    </button>
+
+                     <button 
+                        onClick={onExportMap}
+                        className="btn btn-outline text-xs w-full flex items-center justify-start gap-2 p-2"
+                        disabled={isExporting}
+                        title="Open print dialog to save the map as an image."
+                    >
+                         <ShareIcon className="w-4 h-4" />
+                         {isExporting ? 'Opening...' : 'Share Map Image'}
                     </button>
                 </>
             )}

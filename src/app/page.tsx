@@ -138,6 +138,13 @@ export default function HomePage() {
     const [isRescanning, setIsRescanning] = useState(false);
     const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+    const [isExportingMap, setIsExportingMap] = useState(false);
+    const handleExportMap = () => {
+        if (isExportingMap) return;
+        setIsExportingMap(true);
+    };
+
+
     const handleRescanUnknowns = useCallback(async () => {
         setIsRescanning(true);
         setLoaderMessage("Clearing cache for unknown artists..."); // Use main loader for feedback
@@ -639,6 +646,8 @@ export default function HomePage() {
                             onShowMultiCountryDetails={handleShowMultiCountryDetails}
                             onRescanUnknowns={handleRescanUnknowns}
                             isRescanning={isRescanning}
+                            onExportMap={handleExportMap}
+                            isExporting={isExportingMap}
                         />
                     )}
                     
@@ -649,6 +658,8 @@ export default function HomePage() {
                                 countrySongCounts={isTimelineActive ? timelineMapCounts : countrySongCounts}
                                 onCountryClick={handleMapClick}
                                 selectedIsoCodes={codesToHighlightOnMap}
+                                isExporting={isExportingMap}
+                                onExportComplete={() => setIsExportingMap(false)}
                             />
                             {!isTimelineActive && legendItems.length > 0 && <MapLegend legendItems={legendItems} />}
                         </>
