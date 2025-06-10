@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import { ClockIcon, ListBulletIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, ListBulletIcon, MagnifyingGlassIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 interface MapControlPanelProps {
     isTimelineActive: boolean;
@@ -12,6 +12,8 @@ interface MapControlPanelProps {
     onToggleTimeline: () => void;
     onToggleMultiSelect: () => void;
     onShowMultiCountryDetails: () => void;
+    onRescanUnknowns: () => void;
+    isRescanning: boolean;
 }
 
 const MapControlPanel: React.FC<MapControlPanelProps> = ({
@@ -22,6 +24,8 @@ const MapControlPanel: React.FC<MapControlPanelProps> = ({
     onToggleTimeline,
     onToggleMultiSelect,
     onShowMultiCountryDetails,
+    onRescanUnknowns,
+    isRescanning,
 }) => {
     // We'll hide the main controls if any details panel is open to reduce clutter
     if (isAnyPanelOpen) {
@@ -69,6 +73,15 @@ const MapControlPanel: React.FC<MapControlPanelProps> = ({
                         className="btn btn-outline text-xs w-full flex items-center justify-start gap-2 p-2"
                     >
                         <ClockIcon className="w-4 h-4" /> Show Geo-Timeline
+                    </button>
+                    <button 
+                        onClick={onRescanUnknowns}
+                        className="btn btn-outline text-xs w-full flex items-center justify-start gap-2 p-2"
+                        disabled={isRescanning}
+                        title="Clear all artists with unknown origins from the cache to re-fetch them."
+                    >
+                         <ArrowPathIcon className={`w-4 h-4 ${isRescanning ? 'animate-spin' : ''}`} />
+                         {isRescanning ? 'Scanning...' : 'Re-scan Unknowns'}
                     </button>
                 </>
             )}

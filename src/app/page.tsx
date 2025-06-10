@@ -135,6 +135,37 @@ export default function HomePage() {
 
     const [isMultiSelectModeActive, setIsMultiSelectModeActive] = useState(false);
 
+    const [isRescanning, setIsRescanning] = useState(false);
+    const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+    const handleRescanUnknowns = useCallback(async () => {
+        setIsRescanning(true);
+        setLoaderMessage("Clearing cache for unknown artists..."); // Use main loader for feedback
+
+        try {
+            const response = await fetch('/api/admin/clear-unknowns', {
+                method: 'POST',
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "Failed to clear the cache.");
+            }
+
+            // Set a success message that will be displayed temporarily
+            setStatusMessage({ text: data.message, type: 'success' });
+
+        } catch (error: any) {
+            // Set an error message
+            setStatusMessage({ text: `Error: ${error.message}`, type: 'error' });
+        } finally {
+            setIsRescanning(false);
+            setLoaderMessage(null); // Hide the main loader
+            // Set a timeout to clear the status message after 5 seconds
+            setTimeout(() => setStatusMessage(null), 5000);
+        }
+    }, []);
+
     
     const handleMapClick = useCallback((isoCode: string, countryName: string, isShiftKey: boolean) => {
         if (isMultiSelectModeActive || isShiftKey) {
@@ -580,6 +611,12 @@ export default function HomePage() {
 
             <main className="flex flex-grow pt-[55px]">
                 <div className="relative flex-grow">
+
+                    {statusMessage && (
+                        <div className={`absolute top-2 left-1/2 -translate-x-1/2 z-[1200] p-2 px-4 text-sm font-semibold rounded-nb border-2 shadow-nb transition-opacity duration-300 ${statusMessage.type === 'success' ? 'bg-nb-accent text-nb-text-on-accent border-nb-border' : 'bg-nb-accent-destructive text-nb-text-on-destructive border-nb-border'}`}>
+                            {statusMessage.text}
+                        </div>
+                    )}
                     
                     {/* Render the new control panel only when data is loaded */}
                     {(currentTracks.length > 0 && !isLoadingAnythingNonAuth) && (
@@ -600,6 +637,8 @@ export default function HomePage() {
                             }}
                             onToggleMultiSelect={() => setIsMultiSelectModeActive(prev => !prev)}
                             onShowMultiCountryDetails={handleShowMultiCountryDetails}
+                            onRescanUnknowns={handleRescanUnknowns}
+                            isRescanning={isRescanning}
                         />
                     )}
                     
