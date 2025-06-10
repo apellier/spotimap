@@ -3,10 +3,12 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import React, { useState, useEffect, ChangeEvent, useCallback, useMemo } from "react";
+import { PlusIcon, MinusIcon } from '@heroicons/react/24/outline';
 import * as d3 from 'd3';
 
 // Import Hooks
 import { useSpotifyData } from '@/hooks/useSpotifyData';
+
 import { useArtistOrigins } from '@/hooks/useArtistOrigins';
 import { useMapData } from '@/hooks/useMapData';
 
@@ -135,8 +137,25 @@ export default function HomePage() {
 
     const [isMultiSelectModeActive, setIsMultiSelectModeActive] = useState(false);
 
+    const MIN_TIMELINE_SPEED_MS = 10;
+    const MAX_TIMELINE_SPEED_MS = 200;
+    const TIMELINE_SPEED_STEP = 10;
+    const BASE_SPEED_MS = 50;
+
     const [isRescanning, setIsRescanning] = useState(false);
     const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+    const handleChangeSpeed = (direction: 'increase' | 'decrease') => {
+        setTimelineSpeed(currentSpeed => {
+            if (direction === 'increase') {
+                // Increasing speed means decreasing the interval time
+                return Math.max(MIN_TIMELINE_SPEED_MS, currentSpeed - TIMELINE_SPEED_STEP);
+            } else {
+                // Decreasing speed means increasing the interval time
+                return Math.min(MAX_TIMELINE_SPEED_MS, currentSpeed + TIMELINE_SPEED_STEP);
+            }
+        });
+    };
 
     const [isExportingMap, setIsExportingMap] = useState(false);
     const handleExportMap = () => {
@@ -681,16 +700,49 @@ export default function HomePage() {
                     {isTimelineActive && timelineData.length > 0 && (
                         <div className="absolute bottom-0 left-0 right-0 z-[1100] bg-nb-bg/80 p-4 shadow-lg backdrop-blur-sm">
                             <div className="relative flex items-center gap-4 max-w-screen-md mx-auto">
-                                <button onClick={() => setIsPlaying(prev => !prev)} className="btn btn-icon w-12 h-12 text-xl">{isPlaying ? '❚❚' : '▶'}</button>
-                                <button onClick={() => { setTimelineFrame(0); setIsPlaying(false); }} className="btn btn-icon text-xl">↺</button>
+                                <button onClick={() => setIsPlaying(prev => !prev)} className="btn btn-icon w-12 h-12 text-xl">
+                                    {isPlaying ? '❚❚' : '▶'}
+                                </button>
+                                <button onClick={() => { setTimelineFrame(0); setIsPlaying(false); }} className="btn btn-icon text-xl">
+                                    ↺
+                                </button>
                                 <div className="flex-grow text-center">
-                                    <input type="range" min="0" max={timelineData.length} value={timelineFrame} onChange={(e) => { setIsPlaying(false); setTimelineFrame(Number(e.target.value)); }} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
-                                    <div className="text-xs mt-1 text-nb-text/80">{timelineData[timelineFrame - 1]?.added_at.toLocaleDateString() || "Start"}</div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max={timelineData.length}
+                                        value={timelineFrame}
+                                        onChange={(e) => {
+                                            setIsPlaying(false);
+                                            setTimelineFrame(Number(e.target.value));
+                                        }}
+                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                    />
+                                    <div className="text-xs mt-1 text-nb-text/80">
+                                        {timelineData[timelineFrame - 1]?.added_at.toLocaleDateString() || "Start"}
+                                    </div>
                                 </div>
+                                
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => handleChangeSpeed('decrease')} className="btn btn-icon w-8 h-8 flex items-center justify-center p-0" title="Slow down" disabled={timelineSpeed >= MAX_TIMELINE_SPEED_MS}>
+                                        <MinusIcon className="w-4 h-4 stroke-2" />
+                                    </button>
+                                    <div className="text-xs font-mono w-12 text-center" title="Animation speed">
+                                        {(BASE_SPEED_MS / timelineSpeed).toFixed(1)}x
+                                    </div>
+                                    <button onClick={() => handleChangeSpeed('increase')} className="btn btn-icon w-8 h-8 flex items-center justify-center p-0" title="Speed up" disabled={timelineSpeed <= MIN_TIMELINE_SPEED_MS}>
+                                        <PlusIcon className="w-4 h-4 stroke-2" />
+                                    </button>
+                                </div>
+
                                 <div className="w-40 text-left text-xs hidden sm:block">
-                                    <p className="font-bold truncate">Now Adding:</p>
-                                    <p className="truncate">{timelineData[timelineFrame - 1]?.trackName || "..."}</p>
+                                    <p className="font-bold truncate mb-0">Now Adding:</p>
+                                    <div className="leading-tight text-nb-text/80">
+                                        <p className="truncate m-0">{timelineData[timelineFrame - 1]?.trackName || "..."}</p>
+                                        <p className="truncate m-0 font-semibold">{timelineData[timelineFrame - 1]?.country || "..."}</p>
+                                    </div>
                                 </div>
+                                
                                 <button
                                     onClick={() => { setIsTimelineActive(false); setIsPlaying(false); }}
                                     className="btn btn-icon absolute -top-2 -right-2 w-8 h-8 text-2xl flex items-center justify-center"
