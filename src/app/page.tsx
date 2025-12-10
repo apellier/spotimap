@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { useSession, signIn, signOut } from "next-auth/react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -11,7 +10,6 @@ import { MapProvider, useMapContext } from "@/contexts/MapContext";
 
 // Components
 import Sidebar from '@/components/Sidebar';
-import LoginScreen from '@/components/LoginScreen';
 import StatusLoader from '@/components/StatusLoader';
 import MapContainer from "@/components/features/MapContainer";
 import ControlsContainer from "@/components/features/ControlsContainer";
@@ -22,8 +20,6 @@ import { useTimeline } from "@/hooks/useTimeline";
 
 function AppLayout() {
     const {
-        session,
-        authStatus,
         playlists,
         isLoadingPlaylists,
         isLoadingPlaylistTracks,
@@ -33,7 +29,8 @@ function AppLayout() {
         currentSourceLabel,
         setCurrentSourceLabel,
         currentTracks,
-        deletePlaylist
+        deletePlaylist,
+        addPlaylist
     } = useSpotifyContext();
 
     const {
@@ -106,27 +103,13 @@ function AppLayout() {
     const isLoadingAnythingNonAuth = isLoadingPlaylists || isLoadingPlaylistTracks;
     const finalLoaderMessage = localLoaderMessage || contextLoaderMessage;
 
-    // -- Render Logic --
 
-    if (authStatus === "loading" && !session && !finalLoaderMessage) {
-        return <div className="flex min-h-screen items-center justify-center text-lg text-nb-text/70">Authenticating...</div>;
-    }
-    if (!session) {
-        return <LoginScreen onSignIn={() => signIn("spotify")} />;
-    }
 
     return (
         <div className="flex min-h-screen flex-col bg-nb-bg text-nb-text">
             {finalLoaderMessage && <StatusLoader message={finalLoaderMessage} />}
 
             <Sidebar
-                // Session
-                isLoggedIn={!!session}
-                userName={session.user?.name}
-                userImage={session.user?.image}
-                onSignOut={() => signOut()}
-                onSignIn={() => signIn("spotify")}
-
                 // Playlist
                 playlists={playlists}
                 selectedPlaylistId={selectedPlaylistId}

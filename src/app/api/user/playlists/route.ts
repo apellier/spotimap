@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         // Actually, since we only support public playlists, we can use the user's token to fetch it IF it is public, OR use client credentials.
         // For simplicity, let's try using the user session token first. If the playlist is public, it should work.
 
-        let playlistMetadata = { name: `Playlist ${spotifyId}`, description: "", imageUrl: "" };
+        const playlistMetadata = { name: `Playlist ${spotifyId}`, description: "", imageUrl: "" };
 
         if (session.accessToken) {
             try {

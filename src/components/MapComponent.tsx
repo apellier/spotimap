@@ -98,8 +98,8 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 const originalEvent = evt.originalEvent;
                 if (originalEvent instanceof PointerEvent) { xCoord = originalEvent.pageX; yCoord = originalEvent.pageY; }
                 else if (originalEvent instanceof MouseEvent) { xCoord = originalEvent.pageX; yCoord = originalEvent.pageY; }
-                else if (originalEvent instanceof TouchEvent && originalEvent.changedTouches?.length > 0) { xCoord = originalEvent.changedTouches[0].pageX; yCoord = originalEvent.changedTouches[0].pageY;}
-                
+                else if (originalEvent instanceof TouchEvent && originalEvent.changedTouches?.length > 0) { xCoord = originalEvent.changedTouches[0].pageX; yCoord = originalEvent.changedTouches[0].pageY; }
+
                 setTooltip({ visible: true, content: `${countryName}: ${songCount} song${songCount === 1 ? '' : 's'}`, x: xCoord, y: yCoord });
                 if (mapElement.current) mapElement.current.style.cursor = 'pointer';
                 return true;
@@ -124,7 +124,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 return true;
             });
         });
-        
+
         const mapTargetElement = initialMap.getTargetElement();
         const pointerLeaveListener = () => {
             setTooltip(prev => ({ ...prev, visible: false }));
@@ -134,7 +134,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
             mapTargetElement.addEventListener('pointerleave', pointerLeaveListener);
         }
 
-         return () => {
+        return () => {
             if (mapTargetElement instanceof HTMLElement) {
                 mapTargetElement.removeEventListener('pointerleave', pointerLeaveListener);
             }
@@ -144,7 +144,6 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 mapRef.current = null;
             }
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // EMPTY dependency array: map initializes only once
 
     // Effect to update country styles (this is for visual changes, not full map re-init)
@@ -164,9 +163,9 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
 
             return new Style({
                 fill: new Fill({ color: getCountryColor(songCount, currentMaxSongCount) }),
-                stroke: new Stroke({ 
+                stroke: new Stroke({
                     color: isSelected ? '#FF8E72' : '#BBBBBB', // Your chosen highlight color
-                    width: isSelected ? 2.5 : 1 
+                    width: isSelected ? 2.5 : 1
                 }),
                 zIndex: isSelected ? 1 : 0
             });
@@ -217,7 +216,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
                 // Reset transform for safety
                 mapContext.globalAlpha = 1;
                 mapContext.setTransform(1, 0, 0, 1, 0, 0);
-                
+
                 // Trigger download
                 const link = document.createElement('a');
                 link.download = 'spotimap-export.png';

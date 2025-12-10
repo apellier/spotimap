@@ -34,7 +34,7 @@ export function useArtistOrigins(currentTracks: Array<{ track: SpotifyTrack }>) 
         setTotalUniqueArtistsInCurrentSet(artistNamesToFetch.length);
 
         const newArtistCountriesMap = new Map<string, string | null>();
-        let artistsSuccessfullyFetchedFromCache: string[] = [];
+        const artistsSuccessfullyFetchedFromCache: string[] = [];
         let artistsToFetchFromMusicBrainz: string[] = [...artistNamesToFetch];
 
         // Phase 1: Batch fetch from DB cache

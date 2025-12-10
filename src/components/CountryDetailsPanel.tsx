@@ -16,11 +16,57 @@ const CountryDetailsPanel: React.FC<CountryDetailsPanelProps> = ({
     onClose,
     details,
 }) => {
+    // State for recommendations - must be declared before any early returns
+    const [recommendations, setRecommendations] = React.useState<any[]>([]);
+    const [loadingRecs, setLoadingRecs] = React.useState(false);
+
+    // Reset recommendations when panel acts on different country/details change
+    React.useEffect(() => {
+        setRecommendations([]);
+    }, [details]);
+
+    // Determine if it's multi-view and extract data
+    const isMultiView = details ? ('countries' in details && Array.isArray(details.countries)) : false;
+
+    // Derived: check if we have user data
+    const hasUserData = React.useMemo(() => {
+        if (!details) return false;
+        if (isMultiView) {
+            return (details as MultiCountryDisplayInfo).artists.length > 0;
+        }
+        return (details as SelectedCountryInfo).artists.length > 0;
+    }, [details, isMultiView]);
+
+    // Fetch recommendations if no user data and it's a single country view
+    React.useEffect(() => {
+        if (!isOpen || !details || isMultiView || hasUserData) return;
+
+        // If it's a single country without songs, fetch recommendations
+        const singleDetails = details as SelectedCountryInfo;
+        const iso = singleDetails.isoCode;
+
+        async function fetchRecs() {
+            setLoadingRecs(true);
+            try {
+                const res = await fetch(`/api/musicbrainz/recommendations?country=${iso}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setRecommendations(data.artists || []);
+                }
+            } catch (e) {
+                console.error("Failed to fetch recommendations", e);
+            } finally {
+                setLoadingRecs(false);
+            }
+        }
+
+        fetchRecs();
+    }, [isOpen, hasUserData, isMultiView, details]);
+
+    // Early return after all hooks
     if (!isOpen || !details) {
         return null;
     }
-
-    const isMultiView = 'countries' in details && Array.isArray(details.countries);
 
     let panelTitle: string;
     let displaySongCount: number;
@@ -29,7 +75,6 @@ const CountryDetailsPanel: React.FC<CountryDetailsPanelProps> = ({
 
     if (isMultiView) {
         const multiDetails = details as MultiCountryDisplayInfo;
-        const countryNames = multiDetails.countries.map(c => c.name).join(', ');
         panelTitle = multiDetails.countries.length === 1
             ? `${multiDetails.countries[0].name}`
             : `Selected (${multiDetails.countries.length})`;
@@ -42,46 +87,6 @@ const CountryDetailsPanel: React.FC<CountryDetailsPanelProps> = ({
         displaySongCount = singleDetails.songCount;
         displayArtists = singleDetails.artists;
     }
-
-    // State for recommendations
-    const [recommendations, setRecommendations] = React.useState<any[]>([]);
-    const [loadingRecs, setLoadingRecs] = React.useState(false);
-
-    // Reset recommendations when panel acts on different country/details change
-    React.useEffect(() => {
-        setRecommendations([]);
-    }, [details]);
-
-    // Derived: check if we have user data
-    const hasUserData = displayArtists.length > 0;
-
-    // Fetch recommendations if no user data and it's a single country view
-    React.useEffect(() => {
-        if (!isOpen || isMultiView || hasUserData) return;
-
-        // If it's a single country without songs, fetch recommendations
-        if (details && !hasUserData) {
-            const singleDetails = details as SelectedCountryInfo;
-            const iso = singleDetails.isoCode;
-
-            async function fetchRecs() {
-                setLoadingRecs(true);
-                try {
-                    const res = await fetch(`/api/musicbrainz/recommendations?country=${iso}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        setRecommendations(data.artists || []);
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch recommendations", e);
-                } finally {
-                    setLoadingRecs(false);
-                }
-            }
-
-            fetchRecs();
-        }
-    }, [isOpen, hasUserData, isMultiView, details]);
 
 
     return (
@@ -147,7 +152,7 @@ const CountryDetailsPanel: React.FC<CountryDetailsPanelProps> = ({
                     </div>
                 ) : (
                     <div className="py-8 text-center text-nb-text/50 text-sm">
-                        <p className="italic mb-4">You haven't listened to any artists from here yet.</p>
+                        <p className="italic mb-4">You haven&apos;t listened to any artists from here yet.</p>
 
                         {!isMultiView && (
                             <div className="mt-6 border-t border-nb-border/30 pt-4 text-left">

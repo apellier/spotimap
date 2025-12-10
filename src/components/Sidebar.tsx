@@ -20,19 +20,14 @@ import {
 import { PlaylistItem } from '@/types';
 
 interface SidebarProps {
-    // Session
-    isLoggedIn: boolean;
-    userName?: string | null;
-    userImage?: string | null;
-    onSignOut: () => void;
-    onSignIn: () => void;
 
     // Playlist
-    playlists: (PlaylistItem & { dbId?: string })[];
+    // Playlist
+    playlists: (PlaylistItem & { localId?: string })[];
     selectedPlaylistId: string;
     onPlaylistChange: (newId: string) => void;
     onAddPlaylist: () => void;
-    onDeletePlaylist: (dbId: string) => void;
+    onDeletePlaylist: (spotifyId: string) => void;
     isLoadingPlaylists: boolean;
 
     // Map Controls
@@ -63,7 +58,6 @@ import { ShareCard } from './ShareCard';
 import html2canvas from 'html2canvas';
 
 export default function Sidebar({
-    isLoggedIn, userName, userImage, onSignOut, onSignIn,
     playlists, selectedPlaylistId, onPlaylistChange, onAddPlaylist, onDeletePlaylist, isLoadingPlaylists,
     isTimelineActive, onToggleTimeline,
     isMultiSelectModeActive, onToggleMultiSelect, multiSelectedCountriesCount, onShowMultiCountryDetails,
@@ -74,11 +68,11 @@ export default function Sidebar({
     const { theme, toggleTheme } = useTheme();
 
     // Local state for popovers
-    const [activePopover, setActivePopover] = useState<'playlist' | 'tools' | 'profile' | null>(null);
+    const [activePopover, setActivePopover] = useState<'playlist' | 'tools' | null>(null);
     const [isGeneratingShare, setIsGeneratingShare] = useState(false);
     const shareCardRef = React.useRef<HTMLDivElement>(null);
 
-    const togglePopover = (name: 'playlist' | 'tools' | 'profile') => {
+    const togglePopover = (name: 'playlist' | 'tools') => {
         setActivePopover(activePopover === name ? null : name);
     };
 
@@ -163,9 +157,9 @@ export default function Sidebar({
                                                 >
                                                     {playlist.name}
                                                 </button>
-                                                {playlist.dbId && (
+                                                {playlist.localId && (
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); if (confirm("Delete?")) onDeletePlaylist(playlist.dbId!); }}
+                                                        onClick={(e) => { e.stopPropagation(); if (confirm("Delete?")) onDeletePlaylist(playlist.id); }}
                                                         className="hidden group-hover/item:block text-nb-accent-destructive p-1 hover:bg-nb-bg"
                                                     >
                                                         &times;
@@ -251,43 +245,11 @@ export default function Sidebar({
                 </div>
             </div>
 
-            {/* BOTTOM: Theme & Profile */}
+            {/* BOTTOM: Theme Toggle */}
             <div className="flex flex-col items-center gap-4 w-full mb-2">
-                {/* Theme Toggle */}
                 <button onClick={toggleTheme} className="btn btn-icon w-10 h-10" title="Toggle Theme">
                     {theme === 'dark' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
                 </button>
-
-                {/* Profile */}
-                {isLoggedIn ? (
-                    <div className="relative">
-                        <button onClick={() => togglePopover('profile')} className="btn btn-icon w-10 h-10 overflow-hidden p-0 border-nb-thick">
-                            {userImage ? (
-                                <img src={userImage} alt={userName || "User"} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full bg-nb-accent flex items-center justify-center text-nb-text-on-accent font-bold">
-                                    {userName?.charAt(0) || "U"}
-                                </div>
-                            )}
-                        </button>
-
-                        {activePopover === 'profile' && (
-                            <div className="absolute left-14 bottom-0 w-48 rounded-nb border border-nb-border bg-nb-bg p-3 shadow-nb z-50 animate-in fade-in slide-in-from-left-4">
-                                <div className="mb-3">
-                                    <p className="text-sm font-bold text-nb-text">{userName}</p>
-                                    <p className="text-xs text-nb-text/60">Spotify User</p>
-                                </div>
-                                <button onClick={() => { onSignOut(); setActivePopover(null); }} className="btn btn-destructive w-full text-xs py-2 flex items-center justify-center gap-2">
-                                    <ArrowRightOnRectangleIcon className="w-4 h-4" /> Sign Out
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <button onClick={onSignIn} className="btn btn-accent w-10 h-10 p-0 flex items-center justify-center" title="Sign In">
-                        <UserCircleIcon className="w-6 h-6" />
-                    </button>
-                )}
             </div>
         </aside>
     );

@@ -8,8 +8,27 @@ interface AddPlaylistModalProps {
     onClose: () => void;
 }
 
+// Extract playlist ID from various Spotify URL formats
+function extractPlaylistId(input: string): string | null {
+    // Handle direct ID
+    if (/^[a-zA-Z0-9]{22}$/.test(input)) {
+        return input;
+    }
+
+    // Handle URLs like:
+    // https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
+    // https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M?si=...
+    // spotify:playlist:37i9dQZF1DXcBWIGoYBM5M
+    const urlMatch = input.match(/playlist[/:]([a-zA-Z0-9]{22})/);
+    if (urlMatch) {
+        return urlMatch[1];
+    }
+
+    return null;
+}
+
 export default function AddPlaylistModal({ isOpen, onClose }: AddPlaylistModalProps) {
-    const { fetchPlaylists } = useSpotifyContext();
+    const { addPlaylist } = useSpotifyContext();
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -22,20 +41,27 @@ export default function AddPlaylistModal({ isOpen, onClose }: AddPlaylistModalPr
         setError(null);
 
         try {
-            const res = await fetch('/api/user/playlists', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ spotifyUrl: url }),
-            });
+            const playlistId = extractPlaylistId(url.trim());
+
+            if (!playlistId) {
+                throw new Error("Invalid Spotify playlist URL or ID");
+            }
+
+            // Fetch playlist details from our API to get the name
+            const res = await fetch(`/api/spotify/playlist-info?playlist_id=${playlistId}`);
 
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.error || "Failed to add playlist");
+                throw new Error(data.error || "Failed to fetch playlist info. Make sure it's a public playlist.");
             }
 
-            // Success
+            const playlistData = await res.json();
+
+            // Add to localStorage via context
+            addPlaylist(playlistId, playlistData.name, url);
+
+            // Success - reset and close
             setUrl('');
-            await fetchPlaylists(); // Refresh list
             onClose();
 
         } catch (err: any) {
@@ -50,7 +76,7 @@ export default function AddPlaylistModal({ isOpen, onClose }: AddPlaylistModalPr
             <div className="w-full max-w-md rounded-nb border border-nb-border bg-nb-bg p-6 shadow-nb">
                 <h2 className="mb-4 text-xl font-bold text-nb-text">Add Public Playlist</h2>
                 <p className="mb-4 text-sm text-nb-text/70">
-                    Paste the link to any PUBLIC Spotify playlist.
+                    Paste a link to any <strong>public</strong> Spotify playlist to visualize it on the map.
                 </p>
 
                 <form onSubmit={handleSubmit}>

@@ -1,8 +1,8 @@
 // src/app/api/spotify/playlist-tracks/route.ts
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/authOptions";
 import { NextRequest, NextResponse } from "next/server";
 import { PlaylistTrackItem } from "@/types";
+
+const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 
 interface SpotifyPlaylistTracksResponse {
     items: PlaylistTrackItem[];
@@ -11,6 +11,33 @@ interface SpotifyPlaylistTracksResponse {
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Use Client Credentials flow (no user auth needed)
+async function getClientCredentialsToken(): Promise<string> {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+        throw new Error("Spotify credentials not configured");
+    }
+
+    const res = await fetch(SPOTIFY_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
+        },
+        body: 'grant_type=client_credentials',
+        cache: 'no-store',
+    });
+
+    if (!res.ok) {
+        throw new Error("Failed to get Spotify access token");
+    }
+
+    const data = await res.json();
+    return data.access_token;
+}
 
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3, backoff = 300): Promise<Response> {
     try {
@@ -34,25 +61,29 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, ba
 }
 
 export async function GET(request: NextRequest) {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.accessToken) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const playlistId = searchParams.get("playlist_id");
+
     if (!playlistId) {
         return NextResponse.json({ error: "Playlist ID is required" }, { status: 400 });
     }
 
-    const accessToken = session.accessToken;
-    const limit = 50;
-    const fields = 'total,next,items(added_at,track(id,name,uri,artists(name)))';
-    const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&fields=${fields}`;
-
     try {
+        // Get app-level token (Client Credentials)
+        const accessToken = await getClientCredentialsToken();
+
+        const limit = 50;
+        const fields = 'total,next,items(added_at,track(id,name,uri,artists(name)))';
+        const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&fields=${fields}`;
+
         const firstResponse = await fetchWithRetry(firstUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-        if (!firstResponse.ok) throw new Error(`Failed to fetch initial tracks for playlist ${playlistId}`);
+
+        if (!firstResponse.ok) {
+            if (firstResponse.status === 404) {
+                return NextResponse.json({ error: "Playlist not found or is not public" }, { status: 404 });
+            }
+            throw new Error(`Failed to fetch tracks for playlist ${playlistId}`);
+        }
 
         const firstPage: SpotifyPlaylistTracksResponse = await firstResponse.json();
         const totalTracks = firstPage.total;
@@ -64,14 +95,14 @@ export async function GET(request: NextRequest) {
                 const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=${limit}&offset=${offset}&fields=${fields}`;
                 fetchFunctions.push(() => fetchWithRetry(url, { headers: { Authorization: `Bearer ${accessToken}` } }));
             }
-            
+
             const batchSize = 10;
             const delayBetweenBatches = 50;
 
             for (let i = 0; i < fetchFunctions.length; i += batchSize) {
                 const batch = fetchFunctions.slice(i, i + batchSize);
                 const batchPromises = batch.map(func => func());
-                
+
                 const responses = await Promise.all(batchPromises);
 
                 const additionalPages = await Promise.all(
@@ -96,7 +127,7 @@ export async function GET(request: NextRequest) {
                 }
             }
         }
-        
+
         return NextResponse.json({ tracks: allPlaylistTracks, total: allPlaylistTracks.length });
 
     } catch (error) {
