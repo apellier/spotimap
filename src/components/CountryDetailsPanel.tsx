@@ -2,43 +2,26 @@
 "use client";
 
 import React from 'react';
-import styles from '../app/page.module.css'; //
-import { SelectedCountryInfo, MultiCountryDisplayInfo, ArtistDetail } from '@/types'; //
+import { SelectedCountryInfo, MultiCountryDisplayInfo, ArtistDetail } from '@/types';
+import { XMarkIcon, MusicalNoteIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 
 interface CountryDetailsPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    details: SelectedCountryInfo | MultiCountryDisplayInfo | null; // Can receive either type
-    
-    // Playback & Playlist Action Handlers & State
-    onPlaySong: (trackId: string) => void;
-    onPlayCountryRandomly: () => void; // Generic handler, page.tsx determines if it's single/multi
-    onSavePlaylist: () => void;      // Generic handler, page.tsx determines if it's single/multi
-    playbackLoading: string | null; 
-    playbackError: string | null;
-    isCreatingPlaylist: boolean;
-    playlistCreationStatus: string | null;
+    details: SelectedCountryInfo | MultiCountryDisplayInfo | null;
 }
 
 const CountryDetailsPanel: React.FC<CountryDetailsPanelProps> = ({
     isOpen,
     onClose,
     details,
-    onPlaySong,
-    onPlayCountryRandomly,
-    onSavePlaylist,
-    playbackLoading,
-    playbackError,
-    isCreatingPlaylist,
-    playlistCreationStatus,
 }) => {
     if (!isOpen || !details) {
         return null;
     }
 
-    // Type guard to determine if details are for multiple countries or a single one
     const isMultiView = 'countries' in details && Array.isArray(details.countries);
-    
+
     let panelTitle: string;
     let displaySongCount: number;
     let displayArtists: ArtistDetail[];
@@ -47,109 +30,115 @@ const CountryDetailsPanel: React.FC<CountryDetailsPanelProps> = ({
     if (isMultiView) {
         const multiDetails = details as MultiCountryDisplayInfo;
         const countryNames = multiDetails.countries.map(c => c.name).join(', ');
-        panelTitle = multiDetails.countries.length === 1 
-            // This case should ideally be handled by page.tsx sending SelectedCountryInfo
-            // but as a fallback if multiCountryDisplayData has only one entry:
-            ? `${multiDetails.countries[0].name} (${multiDetails.countries[0].isoCode})` 
-            : `${countryNames.substring(0, 35)}${countryNames.length > 35 ? '...' : ''} (${multiDetails.countries.length} countries)`;
+        panelTitle = multiDetails.countries.length === 1
+            ? `${multiDetails.countries[0].name}`
+            : `Selected (${multiDetails.countries.length})`;
         displaySongCount = multiDetails.totalSongCount;
         displayArtists = multiDetails.artists;
         countriesList = multiDetails.countries;
     } else {
         const singleDetails = details as SelectedCountryInfo;
-        panelTitle = `${singleDetails.name} (${singleDetails.isoCode})`;
+        panelTitle = singleDetails.name;
         displaySongCount = singleDetails.songCount;
         displayArtists = singleDetails.artists;
     }
 
-    const playAllButtonText = playbackLoading === 'country-random' || playbackLoading === 'multi-country-random' 
-        ? 'Starting...' 
-        : 'Play All Randomly';
-    
-    const savePlaylistButtonText = isCreatingPlaylist ? 'Saving...' : 'Save as Playlist';
+    // State for recommendations
+    const [recommendations, setRecommendations] = React.useState<any[]>([]);
+    const [loadingRecs, setLoadingRecs] = React.useState(false);
+
+    // Reset recommendations when panel acts on different country/details change
+    React.useEffect(() => {
+        setRecommendations([]);
+    }, [details]);
+
+    // Derived: check if we have user data
+    const hasUserData = displayArtists.length > 0;
+
+    // Fetch recommendations if no user data and it's a single country view
+    React.useEffect(() => {
+        if (!isOpen || isMultiView || hasUserData) return;
+
+        // If it's a single country without songs, fetch recommendations
+        if (details && !hasUserData) {
+            const singleDetails = details as SelectedCountryInfo;
+            const iso = singleDetails.isoCode;
+
+            async function fetchRecs() {
+                setLoadingRecs(true);
+                try {
+                    const res = await fetch(`/api/musicbrainz/recommendations?country=${iso}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setRecommendations(data.artists || []);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch recommendations", e);
+                } finally {
+                    setLoadingRecs(false);
+                }
+            }
+
+            fetchRecs();
+        }
+    }, [isOpen, hasUserData, isMultiView, details]);
+
 
     return (
-        <>
-            <div
-                className={`${styles.countryPanelOverlay} fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm`}
-                onClick={onClose}
-            />
-            <div
-                className={`${styles.countryPanel} fixed left-1/2 top-1/2 z-[1001] w-[90%] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto p-nb-md md:max-w-xl lg:p-nb-lg`}
-            >
-                <div className={`${styles.countryPanelHeader} flex items-center justify-between`}>
-                    <h3 className="m-0 text-xl font-bold uppercase md:text-2xl">
+        <div className="fixed top-0 right-0 bottom-0 z-[900] w-80 bg-nb-bg border-l border-nb-border shadow-nb flex flex-col pt-16 animate-in slide-in-from-right-4">
+
+            {/* Header */}
+            <div className="p-4 border-b border-nb-border flex items-center justify-between bg-nb-bg">
+                <div>
+                    <h3 className="text-xl font-bold uppercase text-nb-text leading-tight">
                         {panelTitle}
                     </h3>
-                    <button onClick={onClose} className={styles.countryPanelCloseButton}>
-                        ×
-                    </button>
+                    <p className="text-sm text-nb-text/70 mt-1 flex items-center gap-1">
+                        <MusicalNoteIcon className="w-3 h-3" />
+                        {hasUserData ? `${displaySongCount} Songs` : 'No songs yet'}
+                    </p>
                 </div>
+                <button onClick={onClose} className="btn btn-icon w-8 h-8 flex items-center justify-center">
+                    <XMarkIcon className="w-5 h-5" />
+                </button>
+            </div>
 
-                <p className="my-nb-sm text-base">
-                    Total songs from selection: <strong>{displaySongCount}</strong>
-                </p>
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
 
                 {isMultiView && countriesList && countriesList.length > 1 && (
-                    <div className="mb-nb-sm text-xs text-nb-text/80">
-                        Counts per country:
-                        {countriesList.map(c => (
-                            <span key={c.isoCode} className="ml-nb-xs inline-block rounded bg-nb-bg px-1 py-0.5 border border-nb-border after:content-[','] last:after:content-['']">
-                                {c.name}: {c.songCount}
-                            </span>
-                        ))}
+                    <div className="mb-4">
+                        <p className="text-xs font-bold uppercase text-nb-text/50 mb-2">Countries</p>
+                        <div className="flex flex-wrap gap-1">
+                            {countriesList.map(c => (
+                                <span key={c.isoCode} className="text-xs bg-nb-bg-alt px-2 py-1 rounded border border-nb-border">
+                                    {c.name} <span className="text-nb-text/50">({c.songCount})</span>
+                                </span>
+                            ))}
+                        </div>
                     </div>
                 )}
 
-                {playbackError && <p className={`${styles.statusMessage} ${styles.error}`}>{playbackError}</p>}
-                {playlistCreationStatus && (
-                    <p className={`${styles.statusMessage} ${
-                        playlistCreationStatus.toLowerCase().startsWith("error:") ? styles.error :
-                        playlistCreationStatus.includes("created!") || playlistCreationStatus.includes("added") ? styles.success : styles.info
-                    }`}>
-                        {playlistCreationStatus}
-                    </p>
-                )}
-
-                <div className={`${styles.countryPanelActions} my-nb-md flex flex-wrap gap-nb-sm md:gap-nb-md`}>
-                    <button
-                        onClick={onPlayCountryRandomly}
-                        disabled={playbackLoading === 'country-random' || playbackLoading === 'multi-country-random' || displayArtists.length === 0}
-                        className="btn flex-1"
-                    >
-                        {playAllButtonText}
-                    </button>
-                    <button
-                        onClick={onSavePlaylist}
-                        disabled={isCreatingPlaylist || displayArtists.length === 0}
-                        className="btn flex-1"
-                    >
-                        {savePlaylistButtonText}
-                    </button>
-                </div>
-
-                {displayArtists.length > 0 ? (
-                    <div className={`${styles.countryPanelArtistList} max-h-[40vh] overflow-y-auto`}> {/* Added max-height and scroll for artist list */}
-                        <h4 className="mt-nb-lg border-b border-nb-border/50 pb-nb-sm text-sm font-bold uppercase tracking-wider text-nb-text/80">
-                            Artists & Their Songs:
-                        </h4>
+                {hasUserData ? (
+                    <div className="space-y-4">
                         {displayArtists.map(artist => (
-                            <div key={artist.name} className={`${styles.countryPanelArtistBlock} py-nb-sm`}>
-                                <h5 className="mb-nb-xs text-base font-semibold text-nb-text md:text-lg">
-                                    {artist.name} ({artist.songs.length} song{artist.songs.length === 1 ? '' : 's'})
+                            <div key={artist.name} className="border-b border-nb-border/30 pb-2 last:border-0">
+                                <h5 className="text-sm font-bold text-nb-text mb-1">
+                                    {artist.name} <span className="text-xs font-normal text-nb-text/60">({artist.songs.length})</span>
                                 </h5>
-                                <ul className="list-none pl-0">
+                                <ul className="space-y-1">
                                     {artist.songs.map(song => (
-                                        <li key={song.id} className={`${styles.countryPanelSongItem} flex items-center justify-between py-nb-xs text-sm`}>
-                                            <span className="truncate pr-nb-xs" title={song.name}>{song.name}</span>
-                                            <button
-                                                onClick={() => onPlaySong(song.id)}
-                                                disabled={playbackLoading === song.id}
-                                                className={styles.playButton}
-                                                title={`Play ${song.name}`}
+                                        <li key={song.id} className="text-xs text-nb-text/80 truncate pl-2 border-l-2 border-nb-border/30 flex items-center justify-between group">
+                                            <span className="truncate">{song.name}</span>
+                                            <a
+                                                href={`https://open.spotify.com/track/${song.id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="hidden group-hover:flex items-center gap-1 text-[10px] text-nb-accent font-bold uppercase hover:underline ml-2 flex-shrink-0"
+                                                title="Open in Spotify"
                                             >
-                                                {playbackLoading === song.id ? '...' : '▶️'}
-                                            </button>
+                                                Open <ArrowTopRightOnSquareIcon className="w-3 h-3" />
+                                            </a>
                                         </li>
                                     ))}
                                 </ul>
@@ -157,12 +146,48 @@ const CountryDetailsPanel: React.FC<CountryDetailsPanelProps> = ({
                         ))}
                     </div>
                 ) : (
-                    <p className="py-nb-md text-center text-nb-text/70">
-                        No specific artists found in this selection.
-                    </p>
+                    <div className="py-8 text-center text-nb-text/50 text-sm">
+                        <p className="italic mb-4">You haven't listened to any artists from here yet.</p>
+
+                        {!isMultiView && (
+                            <div className="mt-6 border-t border-nb-border/30 pt-4 text-left">
+                                <h4 className="text-sm font-bold uppercase mb-3 flex items-center gap-2">
+                                    <span>🔭</span> SpotiMap Suggests
+                                </h4>
+
+                                {loadingRecs ? (
+                                    <div className="animate-pulse space-y-2">
+                                        <div className="h-4 bg-nb-border/20 rounded w-3/4"></div>
+                                        <div className="h-4 bg-nb-border/20 rounded w-1/2"></div>
+                                    </div>
+                                ) : recommendations.length > 0 ? (
+                                    <ul className="space-y-3">
+                                        {recommendations.map((rec: any) => (
+                                            <li key={rec.id} className="flex flex-col">
+                                                <span className="font-semibold text-nb-text">{rec.name}</span>
+                                                <span className="text-[10px] text-nb-text/60 truncate">
+                                                    {rec.tags.slice(0, 3).join(', ')}
+                                                </span>
+                                                <a
+                                                    href={`https://open.spotify.com/search/${encodeURIComponent(rec.name)}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] text-nb-accent mt-0.5 hover:underline flex items-center gap-1"
+                                                >
+                                                    Find on Spotify <ArrowTopRightOnSquareIcon className="w-2.5 h-2.5" />
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-xs">No recommendations found.</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
-        </>
+        </div>
     );
 };
 

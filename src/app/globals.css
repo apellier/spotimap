@@ -5,25 +5,25 @@
 
 /* Define core theme variables in :root */
 :root {
-  /* Light Theme (Default) */
-  --background-light: #f4f4f4; /* Slightly off-white */
-  --foreground-light: #121212;
-  --accent-light: #1ED760;     /* Vibrant blue */
-  --accent-destructive-light: #D32F2F; /* Stark red for destructive actions */
-  --text-on-accent-light: #ffffff; /* White text on blue accent */
-  --text-on-destructive-light: #ffffff; /* White text on red accent */
-  --border-color-light: var(--foreground-light);
+  /* Light Theme (Soft-Neo Brutalist) */
+  --background-light: #FFFBF0; /* Soft Creamy White */
+  --foreground-light: #2d3748; /* Soft Charcoal */
+  --accent-light: #818cf8;     /* Indigo/Periwinkle */
+  --accent-destructive-light: #ef4444; /* Soft Red */
+  --text-on-accent-light: #ffffff;
+  --text-on-destructive-light: #ffffff;
+  --border-color-light: #1a202c; /* keeping bold borders */
 
-  /* Dark Theme */
-  --background-dark: #121212;
+  /* Dark Theme (Soft-Neo Brutalist Dark) */
+  --background-dark: #1a202c; /* Cool Dark Gray */
   --foreground-dark: #f0f0f0;
-  --accent-dark: #1ED760;      /* Adjusted blue for dark mode */
-  --accent-destructive-dark: #E57373; /* Lighter red for dark mode */
-  --text-on-accent-dark: #111111; /* Dark text on lighter blue accent */
-  --text-on-destructive-dark: #111111; /* Dark text on lighter red accent */
-  --border-color-dark: var(--foreground-dark);
+  --accent-dark: #818cf8;      /* Same Indigo pops well in dark */
+  --accent-destructive-dark: #f87171;
+  --text-on-accent-dark: #ffffff;
+  --text-on-destructive-dark: #111111;
+  --border-color-dark: #000000;
 
-  /* Resolved Theme Variables (these change based on data-theme) */
+  /* Resolved Theme Variables */
   --bg-primary: var(--background-light);
   --text-primary: var(--foreground-light);
   --accent-primary: var(--accent-light);
@@ -32,25 +32,25 @@
   --text-on-destructive: var(--text-on-destructive-light);
   --border-primary: var(--border-color-light);
 
-  /* Neobrutalist Style Properties */
+  /* Neobrutalist Style Properties - Softened */
   --nb-border-width: 2px;
   --nb-border-width-thick: 3px;
-  --nb-radius: 0px; /* Sharp corners */
-  --nb-shadow-offset: 3px;
+  --nb-radius: 12px; /* Softened corners */
+  --nb-shadow-offset: 4px; /* Slightly deeper shadow */
   --nb-shadow: var(--nb-shadow-offset) var(--nb-shadow-offset) 0 0 var(--border-primary);
   --nb-shadow-accent: var(--nb-shadow-offset) var(--nb-shadow-offset) 0 0 var(--accent-primary);
-  --nb-shadow-destructive: var(--nb-shadow-offset) var(--nb-shadow-offset) 0 0 color-mix(in srgb, var(--accent-destructive) 70%, black 30%);
+  --nb-shadow-destructive: var(--nb-shadow-offset) var(--nb-shadow-offset) 0 0 var(--accent-destructive);
 
 
   /* Font */
-  --font-primary: 'Inter', Arial, Helvetica, sans-serif;
+  --font-primary: 'Inter', system-ui, sans-serif;
 
   /* Spacing units */
-  --spacing-xs: 0.25rem;  /* 4px */
-  --spacing-sm: 0.5rem;   /* 8px */
-  --spacing-md: 1rem;     /* 16px */
-  --spacing-lg: 1.5rem;   /* 24px */
-  --spacing-xl: 2rem;     /* 32px */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
 }
 
 /* Apply dark theme variables when data-theme="dark" */

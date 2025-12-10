@@ -11,11 +11,9 @@ export function useMapData(
     const [isAggregating, setIsAggregating] = useState(false);
 
     const aggregateData = useCallback(() => {
-        // Only aggregate if origins are NOT loading and we have tracks and artistCountries
-        if (isLoadingOrigins || currentTracks.length === 0 || artistCountries.size === 0) {
-            if (!isLoadingOrigins && currentTracks.length === 0) { // Clear if no tracks and not loading origins
-                setCountrySongCounts(new Map());
-            }
+        // Aggregate if we have tracks. Even if loading origins, we might have partial data.
+        if (currentTracks.length === 0) {
+            setCountrySongCounts(new Map());
             setIsAggregating(false);
             return;
         }
@@ -35,20 +33,13 @@ export function useMapData(
         });
         setCountrySongCounts(newCounts);
         setIsAggregating(false);
-    }, [currentTracks, artistCountries, isLoadingOrigins]); // Added isLoadingOrigins
+    }, [currentTracks, artistCountries]); // dependency on isLoadingOrigins removed
 
     useEffect(() => {
-        // Trigger aggregation only when isLoadingOrigins is false,
-        // or when currentTracks or artistCountries change *while not loading origins*.
-        if (!isLoadingOrigins) {
-            aggregateData();
-        } else if (currentTracks.length === 0) { // If tracks are cleared while still theoretically loading origins elsewhere
-            setCountrySongCounts(new Map());
-            setIsAggregating(false);
-        }
-        // If isLoadingOrigins is true, we wait for it to become false before re-aggregating.
-        // The aggregateData function itself also checks isLoadingOrigins.
-    }, [currentTracks, artistCountries, isLoadingOrigins, aggregateData]);
+        // Trigger aggregation when tracks or artistCountries change.
+        // We do NOT block on isLoadingOrigins anymore to allow incremental visualization.
+        aggregateData();
+    }, [currentTracks, artistCountries, aggregateData]);
 
     return { countrySongCounts, isAggregating };
 }

@@ -6,6 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model ArtistCache {
@@ -18,4 +19,28 @@ model ArtistCache {
   source          String   @default("MusicBrainzAPI")
 
   @@index([artistNameQuery]) // Index for faster lookups
+}
+
+model User {
+  id             String          @id @default(cuid())
+  spotifyId      String          @unique
+  email          String?
+  name           String?
+  image          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  savedPlaylists SavedPlaylist[]
+}
+
+model SavedPlaylist {
+  id          String   @id @default(cuid())
+  spotifyId   String   // The generic Spotify ID of the playlist
+  name        String
+  description String?
+  imageUrl    String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, spotifyId]) // Prevent duplicates for same user
 }

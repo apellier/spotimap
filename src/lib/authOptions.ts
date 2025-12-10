@@ -4,14 +4,7 @@ import SpotifyProvider, { SpotifyProfile } from "next-auth/providers/spotify"; /
 
 const spotifyScopes = [
     "user-read-email",
-    "user-library-read",
-    "playlist-read-private",
-    "playlist-read-collaborative",
-    "user-modify-playback-state",
-    "user-read-playback-state",
-    "streaming",
-    "playlist-modify-public",
-    "playlist-modify-private",
+    "user-read-private", // Required for getting user ID/Profile
 ];
 
 export const authOptions: AuthOptions = {
@@ -104,10 +97,10 @@ export const authOptions: AuthOptions = {
         async session({ session, token }) {
             // Send properties to the client, like an access_token and user ID from the token.
             if (token.accessToken) {
-              session.accessToken = token.accessToken as string;
+                session.accessToken = token.accessToken as string;
             }
             if (token.error) {
-              session.error = token.error as string | undefined;
+                session.error = token.error as string | undefined;
             }
             if (session.user && token.userId) {
                 session.user.id = token.userId as string; // Add user ID to session

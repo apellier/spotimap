@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { SunIcon, MoonIcon } from '@heroicons/react/24/outline';
+import { SunIcon, MoonIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { PlaylistItem } from '@/types';
 
 interface TopMenuProps {
@@ -12,21 +12,24 @@ interface TopMenuProps {
     onSignOut: () => void;
     onSignIn: () => void;
     currentSourceLabel: string;
-    onFetchLikedSongs: () => void;
-    playlists: PlaylistItem[];
+    // onFetchLikedSongs removed
+    playlists: (PlaylistItem & { dbId?: string })[]; // Updated type
     selectedPlaylistId: string;
     onPlaylistChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
     isLoadingData: boolean;
     isLoadingPlaylists: boolean;
     unknownsCount: number;
     onUnknownsClick: () => void;
+    onAddPlaylist: () => void; // New prop
+    onDeletePlaylist: (dbId: string) => void; // New prop
 }
 
 const TopMenu: React.FC<TopMenuProps> = ({
     isLoggedIn, userName, onSignOut, onSignIn,
-    currentSourceLabel, onFetchLikedSongs, playlists, selectedPlaylistId, onPlaylistChange,
+    currentSourceLabel, playlists, selectedPlaylistId, onPlaylistChange,
     isLoadingData, isLoadingPlaylists,
-    unknownsCount, onUnknownsClick
+    unknownsCount, onUnknownsClick,
+    onAddPlaylist, onDeletePlaylist
 }) => {
     const { theme: currentTheme, toggleTheme: onToggleTheme } = useTheme();
 
@@ -52,39 +55,58 @@ const TopMenu: React.FC<TopMenuProps> = ({
 
                 {/* Center Section */}
                 {isLoggedIn && (
-                     <div className="flex w-full flex-col items-stretch gap-nb-sm order-last
+                    <div className="flex w-full flex-col items-stretch gap-nb-sm order-last
                                    sm:order-none sm:w-auto sm:flex-row sm:items-center sm:justify-center sm:gap-nb-sm">
-                        <span className="hidden text-xs uppercase text-nb-text/70 sm:inline-block sm:mr-nb-xs">
-                            Display:
-                        </span>
-                        <button
-                            onClick={onFetchLikedSongs}
-                            className={`btn w-full px-nb-sm py-1 text-xs sm:w-auto ${currentSourceLabel === "Liked Songs" || currentSourceLabel === "Select Source" ? 'btn-accent' : 'btn-outline'}`} // Highlight "Liked Songs" by default or if it's the active source
-                            disabled={isLoadingData}
-                        >
-                            Liked Songs
-                        </button>
-                        <select
-                            value={selectedPlaylistId}
-                            onChange={onPlaylistChange}
-                            disabled={isLoadingData || (!isLoadingPlaylists && playlists.length === 0)}
-                            className="w-full rounded-nb border-nb border-nb-border bg-nb-bg px-nb-sm py-[7px] text-xs font-semibold uppercase text-nb-text focus:border-nb-accent focus:outline-nb-accent focus:outline-offset-1 focus:ring-0 sm:max-w-[200px] md:max-w-[220px]" // Applied more specific styles matching .btn but for select
-                        >
-                            <option value="">
-                                {isLoadingPlaylists ? "Loading Playlists..." : (playlists.length === 0 ? "No Playlists" : "Select a Playlist...")}
-                            </option>
-                            {playlists.map((playlist) => (
-                                <option key={playlist.id} value={playlist.id}>
-                                    {playlist.name} ({playlist.tracks.total})
+
+                        {/* Selector */}
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={selectedPlaylistId}
+                                onChange={onPlaylistChange}
+                                disabled={isLoadingData || (!isLoadingPlaylists && playlists.length === 0)}
+                                className="w-full rounded-nb border-nb border-nb-border bg-nb-bg px-nb-sm py-[7px] text-xs font-semibold uppercase text-nb-text focus:border-nb-accent focus:outline-nb-accent focus:outline-offset-1 focus:ring-0 sm:max-w-[200px] md:max-w-[220px]"
+                            >
+                                <option value="">
+                                    {isLoadingPlaylists ? "Loading..." : (playlists.length === 0 ? "No Saved Playlists" : "Select Playlist...")}
                                 </option>
-                            ))}
-                        </select>
+                                {playlists.map((playlist) => (
+                                    <option key={playlist.id} value={playlist.id}>
+                                        {playlist.name}
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Delete Button (only if playlist selected) */}
+                            {selectedPlaylistId && (
+                                <button
+                                    onClick={() => {
+                                        const p = playlists.find(pl => pl.id === selectedPlaylistId);
+                                        if (p?.dbId && confirm(`Delete playlist "${p.name}"?`)) {
+                                            onDeletePlaylist(p.dbId);
+                                        }
+                                    }}
+                                    className="btn btn-outline text-xs px-2 py-1 text-nb-accent-destructive border-nb-accent-destructive hover:bg-nb-accent-destructive hover:text-white"
+                                    title="Remove this playlist"
+                                >
+                                    &times;
+                                </button>
+                            )}
+
+                            <button
+                                onClick={onAddPlaylist}
+                                className="btn btn-accent px-nb-sm py-1 text-xs flex items-center gap-1"
+                                title="Add a public playlist by URL"
+                            >
+                                <PlusIcon className="w-3 h-3" />
+                                Add
+                            </button>
+                        </div>
                     </div>
                 )}
 
                 {/* Right Section */}
                 <div className="flex items-center gap-nb-xs sm:gap-nb-sm">
-                     {isLoggedIn && (
+                    {isLoggedIn && (
                         <button
                             onClick={onUnknownsClick}
                             className={`btn btn-outline px-nb-sm py-1 text-xs`}
@@ -95,7 +117,7 @@ const TopMenu: React.FC<TopMenuProps> = ({
                     )}
                     <button
                         onClick={onToggleTheme}
-                        className={`btn btn-icon p-nb-xs`} // Ensure 'p-nb-xs' provides adequate padding for an icon button
+                        className={`btn btn-icon p-nb-xs`}
                         aria-label="Toggle theme"
                     >
                         {currentTheme === 'light' ?
@@ -103,10 +125,10 @@ const TopMenu: React.FC<TopMenuProps> = ({
                             <SunIcon className="h-4 w-4 text-nb-text group-hover:text-nb-text-on-accent" />}
                     </button>
                     {!isLoggedIn && (
-                         <button
+                        <button
                             onClick={onSignIn}
                             className={`btn btn-accent px-nb-md py-nb-sm text-sm`}
-                         >
+                        >
                             Sign In
                         </button>
                     )}
