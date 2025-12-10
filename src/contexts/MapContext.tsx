@@ -10,7 +10,7 @@ import { getCountryColor } from '@/utils/mapUtils'; // Ensure this exists or mov
 
 interface MapContextType {
     // Artist & Country Data
-    artistCountries: Map<string, string>;
+    artistCountries: Map<string, string | null>;
     isLoadingArtistCountries: boolean;
     unknownsCount: number;
     unknownsList: any[]; // refine type
@@ -55,7 +55,7 @@ interface MapContextType {
 const MapContext = createContext<MapContextType | undefined>(undefined);
 
 export function MapProvider({ children }: { children: ReactNode }) {
-    const { currentTracks, isLoadingLikedSongs, isLoadingPlaylists, isLoadingPlaylistTracks, playlists, selectedPlaylistId, authStatus, session } = useSpotifyContext();
+    const { currentTracks, isLoadingPlaylists, isLoadingPlaylistTracks, playlists, selectedPlaylistId } = useSpotifyContext();
 
     const {
         artistCountries, isLoadingArtistCountries, unknownsCount, unknownsList,
@@ -237,9 +237,9 @@ export function MapProvider({ children }: { children: ReactNode }) {
 
     // Loader Message Logic
     const loaderMessage = useMemo(() => {
-        if (authStatus === "loading" && !session) return "Authenticating...";
-        else if (isLoadingPlaylists && playlists.length === 0) return "Fetching your playlists from Spotify...";
-        else if (isLoadingLikedSongs) return "Fetching your liked songs from Spotify...";
+        // if (authStatus === "loading" && !session) return "Authenticating..."; // Removed
+        if (isLoadingPlaylists && playlists.length === 0) return "Fetching your playlists from Spotify...";
+        // else if (isLoadingLikedSongs) return "Fetching your liked songs from Spotify..."; // Removed
         else if (isLoadingPlaylistTracks) {
             const pName = playlists.find(p => p.id === selectedPlaylistId)?.name || "selected playlist";
             const pTotal = playlists.find(p => p.id === selectedPlaylistId)?.tracks.total || 0;
@@ -250,7 +250,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
             return `Processing ${currentTracks.length} songs: Aggregating map data...`;
         }
         return null;
-    }, [authStatus, session, isLoadingPlaylists, playlists, isLoadingLikedSongs, isLoadingPlaylistTracks, selectedPlaylistId, currentTracks, isLoadingArtistCountries, processedArtistCountForLoader, totalUniqueArtistsInCurrentSet, isAggregating]);
+    }, [isLoadingPlaylists, playlists, isLoadingPlaylistTracks, selectedPlaylistId, currentTracks, isLoadingArtistCountries, processedArtistCountForLoader, totalUniqueArtistsInCurrentSet, isAggregating]);
 
     const value = {
         artistCountries,
