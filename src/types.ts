@@ -16,11 +16,7 @@ export interface SpotifyTrack {
   artists: SpotifyArtist[];
 }
 
-/** An item from the "Liked Songs" list */
-export interface LikedSongItem {
-  added_at: string;
-  track: SpotifyTrack;
-}
+
 
 /** An item from a specific playlist */
 export interface PlaylistTrackItem {
@@ -67,16 +63,16 @@ export interface SelectedCountryInfo {
 
 /** Basic info for tracking multi-selected countries */
 export interface SelectedCountryBasicInfo {
-isoCode: string;
-name: string;
+  isoCode: string;
+  name: string;
 }
 
 /** Data for the panel when multiple countries are selected */
 export interface MultiCountryDisplayInfo {
-countries: Array<SelectedCountryBasicInfo & { songCount: number }>;
-totalSongCount: number;
-artists: ArtistDetail[];
-allTrackUris: string[];
+  countries: Array<SelectedCountryBasicInfo & { songCount: number }>;
+  totalSongCount: number;
+  artists: ArtistDetail[];
+  allTrackUris: string[];
 }
 
 /** For the map legend component */
