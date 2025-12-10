@@ -41,6 +41,7 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     const [currentSourceLabel, setCurrentSourceLabel] = useState<string>("Select Source");
 
     // Load playlists from localStorage on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         const saved = getSavedPlaylists();
         setLocalPlaylists(saved);
