@@ -17,7 +17,7 @@
     "docker": "^1.0.0",
     "docker-compose": "^1.2.0",
     "html2canvas": "^1.4.1",
-    "next": "15.3.2",
+    "next": "15.3.6",
     "next-auth": "^4.24.11",
     "ol": "^10.5.0",
     "react": "^19.0.0",
