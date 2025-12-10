@@ -7,7 +7,6 @@ import {
     MusicalNoteIcon,
     ClockIcon,
     WrenchScrewdriverIcon,
-    UserCircleIcon,
     SunIcon,
     MoonIcon,
     ArrowRightOnRectangleIcon,
@@ -21,7 +20,6 @@ import { PlaylistItem } from '@/types';
 
 interface SidebarProps {
 
-    // Playlist
     // Playlist
     playlists: (PlaylistItem & { localId?: string })[];
     selectedPlaylistId: string;

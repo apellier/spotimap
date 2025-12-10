@@ -17,9 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="en">
             <body className={inter.className}> {/* Ensure inter.className or your font is applied */}
-                <ThemeProvider> {/* Wrap NextAuthProvider or children */}
-                    <NextAuthProvider>{children}</NextAuthProvider>
-                </ThemeProvider>
+                <ThemeProvider>{children}</ThemeProvider>
             </body>
         </html>
     );
