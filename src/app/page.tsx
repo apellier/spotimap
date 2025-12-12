@@ -116,7 +116,7 @@ function AppLayout() {
 
 
     return (
-        <div className="flex min-h-screen flex-col bg-nb-bg text-nb-text">
+        <div className="flex h-screen flex-col bg-nb-bg text-nb-text overflow-hidden">
             {finalLoaderMessage && <StatusLoader message={finalLoaderMessage} />}
 
             <Sidebar
@@ -192,7 +192,7 @@ function AppLayout() {
                 }
             />
 
-            <main className="flex flex-grow flex-col md:flex-row md:pl-16 pb-16 md:pb-0 transition-all duration-300">
+            <main className="flex flex-1 flex-col md:flex-row md:pl-16 pb-16 md:pb-0 transition-all duration-300">
                 <div className="relative flex-grow w-full h-full">
 
                     {/* Status Toast - Fixed to viewport */}

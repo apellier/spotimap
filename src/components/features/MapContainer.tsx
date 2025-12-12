@@ -35,7 +35,7 @@ export default function MapContainer({
     }, [multiSelectedCountries]);
 
     return (
-        <>
+        <div className="absolute inset-0">
             <MapComponent
                 countrySongCounts={isTimelineActive ? timelineMapCounts : countrySongCounts}
                 onCountryClick={handleMapClick}
@@ -44,6 +44,6 @@ export default function MapContainer({
                 onExportComplete={onExportComplete}
             />
             {!isTimelineActive && legendItems.length > 0 && <MapLegend legendItems={legendItems} />}
-        </>
+        </div>
     );
 }

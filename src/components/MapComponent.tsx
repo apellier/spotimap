@@ -50,10 +50,17 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
 
     // Effect for initializing the map (should only run once)
     useEffect(() => {
-        if (!mapElement.current || mapRef.current) {
+        console.log("MapComponent: Initializing map...");
+        if (!mapElement.current) {
+            console.error("MapComponent: mapElement ref is null");
+            return;
+        }
+        if (mapRef.current) {
+            console.log("MapComponent: Map already initialized");
             return;
         }
 
+        console.log("MapComponent: Creating OlMap instance");
         const osmLayer = new TileLayer({ source: new OSM() });
         const initialVectorSource = new VectorSource<Feature<Geometry>>();
         const countriesLayer = new VectorLayer({
@@ -68,11 +75,26 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
         });
         mapRef.current = initialMap;
 
+        // Add ResizeObserver to handle container size changes
+        const resizeObserver = new ResizeObserver(() => {
+            if (mapRef.current) {
+                console.log("MapComponent: Resizing map");
+                mapRef.current.updateSize();
+            }
+        });
+        resizeObserver.observe(mapElement.current);
+
+        console.log("MapComponent: Fetching /countries.geojson");
         fetch('/countries.geojson')
-            .then(response => response.ok ? response.json() : Promise.reject(`HTTP error! status: ${response.status}`))
+            .then(response => {
+                console.log(`MapComponent: Fetch response status: ${response.status}`);
+                return response.ok ? response.json() : Promise.reject(`HTTP error! status: ${response.status}`);
+            })
             .then(data => {
+                console.log("MapComponent: GeoJSON loaded, adding features");
                 const geoJsonFormat = new GeoJSON();
                 const features = geoJsonFormat.readFeatures(data, { featureProjection: 'EPSG:3857' }) as Feature<Geometry>[];
+                console.log(`MapComponent: Added ${features.length} features`);
                 initialVectorSource.addFeatures(features);
             })
             .catch(error => console.error("Error loading GeoJSON data:", error));
@@ -135,6 +157,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ countrySongCounts, onCountr
         }
 
         return () => {
+            resizeObserver.disconnect(); // Clean up observer
             if (mapTargetElement instanceof HTMLElement) {
                 mapTargetElement.removeEventListener('pointerleave', pointerLeaveListener);
             }
