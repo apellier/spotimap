@@ -107,7 +107,7 @@ export default function Sidebar({
     };
 
     return (
-        <aside className="fixed left-0 top-0 bottom-0 z-[1000] flex w-16 flex-col items-center justify-between border-r border-nb-border bg-nb-bg py-4 shadow-nb">
+        <aside className="fixed bottom-0 left-0 right-0 z-[1000] flex h-16 w-full flex-row items-center justify-between border-t border-nb-border bg-nb-bg px-4 shadow-nb-accent md:top-0 md:h-auto md:w-16 md:flex-col md:border-r md:border-t-0 md:py-4 md:px-0">
 
             {/* Hidden Share Card for Generation */}
             <div className="absolute -left-[9999px] top-0">
@@ -119,20 +119,21 @@ export default function Sidebar({
                 />
             </div>
 
-            {/* TOP: Logo & Main Nav */}
-            <div className="flex flex-col items-center gap-6 w-full">
+            {/* TOP/LEFT: Logo & Main Nav */}
+            <div className="flex flex-row items-center gap-4 md:flex-col md:gap-6 md:w-full">
                 {/* Logo */}
-                <div className="flex h-10 w-10 items-center justify-center rounded-nb border border-nb-border bg-nb-accent text-nb-text-on-accent font-bold text-lg cursor-pointer shadow-nb-accent hover:translate-y-[2px] transition-transform" title="SpotiMap">
+                <div className="flex h-10 w-10 items-center justify-center rounded-nb border border-nb-border bg-nb-accent text-nb-text-on-accent font-bold text-lg cursor-pointer shadow-nb-accent hover:translate-y-[2px] transition-transform shrink-0" title="SpotiMap">
                     SM
                 </div>
 
                 {/* Navigation */}
-                <div className="flex flex-col gap-4 w-full items-center">
+                <div className="flex flex-row gap-4 items-center md:flex-col md:w-full">
 
                     {/* Playlist (Main Action) */}
                     <div className="relative group">
                         <button
                             onClick={() => togglePopover('playlist')}
+                            aria-label="Playlists"
                             className={`btn btn-icon w-10 h-10 ${selectedPlaylistId ? 'text-nb-accent border-nb-accent' : ''}`}
                             title={currentPlaylistName}
                         >
@@ -141,7 +142,7 @@ export default function Sidebar({
 
                         {/* Playlist Popover */}
                         {activePopover === 'playlist' && (
-                            <div className="absolute left-14 top-0 w-64 rounded-nb border border-nb-border bg-nb-bg p-3 shadow-nb z-50 animate-in fade-in slide-in-from-left-4">
+                            <div className="absolute bottom-14 left-0 w-64 rounded-nb border border-nb-border bg-nb-bg p-3 shadow-nb z-50 animate-in fade-in slide-in-from-bottom-4 md:top-0 md:bottom-auto md:left-14 md:slide-in-from-left-4">
                                 <h4 className="mb-2 text-xs font-bold uppercase text-nb-text/50">Playlists</h4>
                                 <div className="max-h-60 overflow-y-auto space-y-1 mb-2">
                                     {playlists.length === 0 ? (
@@ -180,6 +181,7 @@ export default function Sidebar({
                     {/* Timeline */}
                     <button
                         onClick={onToggleTimeline}
+                        aria-label="Toggle Time Travel"
                         className={`btn btn-icon w-10 h-10 ${isTimelineActive ? 'bg-nb-accent text-nb-text-on-accent border-nb-accent' : ''}`}
                         title="Toggle Time Travel"
                     >
@@ -190,6 +192,7 @@ export default function Sidebar({
                     <div className="relative">
                         <button
                             onClick={() => togglePopover('tools')}
+                            aria-label="Tools"
                             className="btn btn-icon w-10 h-10"
                             title="Tools (Multi-select, Export, Unknowns)"
                         >
@@ -198,7 +201,7 @@ export default function Sidebar({
 
                         {/* Tools Popover */}
                         {activePopover === 'tools' && (
-                            <div className="absolute left-14 top-0 w-56 rounded-nb border border-nb-border bg-nb-bg p-2 shadow-nb z-50 space-y-2 animate-in fade-in slide-in-from-left-4">
+                            <div className="absolute bottom-14 left-0 w-56 rounded-nb border border-nb-border bg-nb-bg p-2 shadow-nb z-50 space-y-2 animate-in fade-in slide-in-from-bottom-4 md:top-0 md:bottom-auto md:left-14 md:slide-in-from-left-4">
                                 <h4 className="px-2 py-1 text-xs font-bold uppercase text-nb-text/50 border-b border-nb-border/30">Map Tools</h4>
 
                                 {/* Multi Select */}
@@ -243,8 +246,8 @@ export default function Sidebar({
                 </div>
             </div>
 
-            {/* BOTTOM: Theme Toggle */}
-            <div className="flex flex-col items-center gap-4 w-full mb-2">
+            {/* BOTTOM/RIGHT: Theme Toggle */}
+            <div className="flex flex-row items-center gap-4 md:flex-col md:w-full md:mb-2">
                 <button onClick={toggleTheme} className="btn btn-icon w-10 h-10" title="Toggle Theme">
                     {theme === 'dark' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
                 </button>

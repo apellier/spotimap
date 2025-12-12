@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -105,6 +105,16 @@ function AppLayout() {
 
 
 
+    // Open modal on mount if no playlist is selected and we are not in a "loading" state that might resolve to a playlist
+    useEffect(() => {
+        // Simple check: if we have no tracks and not loading, prompt user.
+        // Or if we just want to force it on landing essentially:
+        if (!selectedPlaylistId && !isLoadingAnythingNonAuth) {
+            setIsAddPlaylistModalOpen(true);
+        }
+    }, [selectedPlaylistId, isLoadingAnythingNonAuth]);
+
+
     return (
         <div className="flex min-h-screen flex-col bg-nb-bg text-nb-text">
             {finalLoaderMessage && <StatusLoader message={finalLoaderMessage} />}
@@ -182,30 +192,39 @@ function AppLayout() {
                 }
             />
 
-            <main className="flex flex-grow ml-16">
-                <div className="relative flex-grow">
+            <main className="flex flex-grow flex-col md:flex-row md:pl-16 pb-16 md:pb-0 transition-all duration-300">
+                <div className="relative flex-grow w-full h-full">
 
-                    {/* Status Toast */}
+                    {/* Status Toast - Fixed to viewport */}
                     {statusMessage && (
-                        <div className={`absolute top-2 left-1/2 -translate-x-1/2 z-[1200] p-2 px-4 text-sm font-semibold rounded-nb border-2 shadow-nb transition-opacity duration-300 ${statusMessage.type === 'success' ? 'bg-nb-accent text-nb-text-on-accent border-nb-border' : 'bg-nb-accent-destructive text-nb-text-on-destructive border-nb-border'}`}>
+                        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[1300] p-3 px-6 text-sm font-semibold rounded-nb border-2 shadow-nb transition-opacity duration-300 ${statusMessage.type === 'success' ? 'bg-nb-accent text-nb-text-on-accent border-nb-border' : 'bg-nb-accent-destructive text-nb-text-on-destructive border-nb-border'}`}>
                             {statusMessage.text}
                         </div>
                     )}
 
                     {/* Map & Legend */}
-                    {(currentTracks.length > 0 || isLoadingAnythingNonAuth) ? (
-                        <MapContainer
-                            isTimelineActive={timeline.isTimelineActive}
-                            timelineMapCounts={timeline.timelineMapCounts}
-                            isExportingMap={isExportingMap}
-                            onExportComplete={() => setIsExportingMap(false)}
-                        />
-                    ) : (
-                        !finalLoaderMessage && (
-                            <div className="flex h-full w-full items-center justify-center border-nb-thick border-dashed border-nb-border/50 p-nb-lg text-center text-nb-text/70">
-                                <p>Select a saved playlist or add a public playlist to visualize!</p>
+                    {/* Map & Legend */}
+                    <MapContainer
+                        isTimelineActive={timeline.isTimelineActive}
+                        timelineMapCounts={timeline.timelineMapCounts}
+                        isExportingMap={isExportingMap}
+                        onExportComplete={() => setIsExportingMap(false)}
+                    />
+
+                    {/* Welcome Overlay */}
+                    {(currentTracks.length === 0 && !isLoadingAnythingNonAuth && !finalLoaderMessage) && (
+                        <div className="absolute inset-0 flex items-center justify-center z-10 p-4 pointer-events-none">
+                            <div className="max-w-md w-full space-y-4 bg-nb-bg/90 backdrop-blur-md p-6 rounded-xl border border-nb-border shadow-nb text-center pointer-events-auto">
+                                <h3 className="text-xl font-bold text-nb-text">Welcome to Spotimap!</h3>
+                                <p className="text-nb-text/70">Select a saved playlist or add a public playlist to visualize your music journey on the map.</p>
+                                <button
+                                    onClick={() => setIsAddPlaylistModalOpen(true)}
+                                    className="btn btn-accent text-sm px-6 py-2"
+                                >
+                                    Add Public Playlist
+                                </button>
                             </div>
-                        )
+                        </div>
                     )}
 
                     {/* Controls & Panels */}

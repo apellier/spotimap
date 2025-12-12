@@ -6,6 +6,7 @@ import CountryDetailsPanel from '@/components/CountryDetailsPanel';
 import UnknownsPanel from '@/components/UnknownsPanel';
 import { PlusIcon, MinusIcon } from '@heroicons/react/24/outline'; // For timeline
 import { useSpotifyContext } from '@/contexts/SpotifyContext';
+import Slider from '@/components/ui/Slider';
 
 interface ControlsContainerProps {
     // Timeline props
@@ -76,19 +77,17 @@ export default function ControlsContainer({
                         <button onClick={() => { timeline.setTimelineFrame(0); timeline.setIsPlaying(false); }} className="btn btn-icon text-xl">
                             ↺
                         </button>
-                        <div className="flex-grow text-center">
-                            <input
-                                type="range"
-                                min="0"
+                        <div className="flex-grow text-center px-2">
+                            <Slider
+                                min={0}
                                 max={timeline.timelineData.length}
                                 value={timeline.timelineFrame}
-                                onChange={(e) => {
+                                onChange={(val) => {
                                     timeline.setIsPlaying(false);
-                                    timeline.setTimelineFrame(Number(e.target.value));
+                                    timeline.setTimelineFrame(val);
                                 }}
-                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                             />
-                            <div className="text-xs mt-1 text-nb-text/80">
+                            <div className="text-xs mt-2 text-nb-text/80 font-mono">
                                 {timeline.timelineData[timeline.timelineFrame - 1]?.added_at.toLocaleDateString() || "Start"}
                             </div>
                         </div>
